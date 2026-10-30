@@ -21,7 +21,7 @@ export default async function SessionInspector({params}:{params:Promise<{id:stri
     sql`SELECT e.ordinal,e.source,e.displayed_at,e.ended_at,e.mutation,t.strategy_family,t.strategy_version
       FROM exposures e LEFT JOIN tactics t ON t.id=e.tactic_id
       WHERE e.session_id=${id} ORDER BY e.ordinal LIMIT 1000`,
-    sql`SELECT event_key,type,created_at,payload FROM events WHERE session_id=${id} ORDER BY created_at,event_key LIMIT 1000`,
+    sql`SELECT event_key,type,occurred_at,payload FROM events WHERE session_id=${id} ORDER BY occurred_at,event_key LIMIT 1000`,
     sql`SELECT classification,observed_reason,evidence FROM outcomes WHERE session_id=${id} LIMIT 1`
   ]);
   if(!sessions.length)notFound();
@@ -43,7 +43,7 @@ export default async function SessionInspector({params}:{params:Promise<{id:stri
         </article>;})}
       {!exposures.length&&<p className="obs-note">No exposures were recorded.</p>}
     </section>
-    <section><h2>ACTIVITY & HEARTBEATS / {events.length} EVENTS</h2><div className="obs-table-wrap"><table><thead><tr><th>Time</th><th>Type</th><th>Key</th><th>Elapsed</th><th>Clicks</th><th>Scrolls</th><th>Idle</th><th>Reported reason</th></tr></thead><tbody>{events.map(e=>{const p=(e.payload??{}) as Record<string,unknown>;return <tr key={text(e.event_key)}><td>{stamp(e.created_at)}</td><td>{text(e.type)}</td><td><code>{text(e.event_key)}</code></td><td>{secs(p.elapsedMs)}</td><td>{text(p.clicks)}</td><td>{text(p.scrolls)}</td><td>{secs(p.idleMs)}</td><td>{text(p.reason)}</td></tr>;})}</tbody></table></div>
+    <section><h2>ACTIVITY & HEARTBEATS / {events.length} EVENTS</h2><div className="obs-table-wrap"><table><thead><tr><th>Time</th><th>Type</th><th>Key</th><th>Elapsed</th><th>Clicks</th><th>Scrolls</th><th>Idle</th><th>Reported reason</th></tr></thead><tbody>{events.map(e=>{const p=(e.payload??{}) as Record<string,unknown>;return <tr key={text(e.event_key)}><td>{stamp(e.occurred_at)}</td><td>{text(e.type)}</td><td><code>{text(e.event_key)}</code></td><td>{secs(p.elapsedMs)}</td><td>{text(p.clicks)}</td><td>{text(p.scrolls)}</td><td>{secs(p.idleMs)}</td><td>{text(p.reason)}</td></tr>;})}</tbody></table></div>
     <p className="obs-note">Activity metrics are aggregate client-reported snapshots; no mouse paths or raw keystrokes are stored. Only the first 1,000 events are shown.</p></section>
     <section><h2>RECORDED OUTCOME</h2>{outcomes.length?<div className="obs-exposure"><strong>{text(outcomes[0].classification)}</strong><p>Observed reason: {text(outcomes[0].observed_reason)}</p><pre className="obs-evidence">{JSON.stringify(outcomes[0].evidence??{},null,2)}</pre></div>:<p className="obs-note">No terminal outcome has been recorded.</p>}</section>
     <footer className="obs-note">Restricted access · Read-only inspection · Historical missing observations are not reconstructed.</footer>
