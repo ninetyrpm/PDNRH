@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashCredential } from '@/lib/experiment';
 import { validateMutation, BASE_MUTATION, fallbackMutation } from '@/lib/mutation';
-import { assignedTactic } from '@/lib/tactics';
+import { TACTIC_LIBRARY } from '@/lib/tactics';
 
 export const runtime='nodejs';
 function sameMutation(a: NonNullable<ReturnType<typeof validateMutation>>, b: NonNullable<ReturnType<typeof validateMutation>>) {
@@ -26,7 +26,7 @@ export async function POST(req:NextRequest,ctx:{params:Promise<{id:string}>}) {
     return NextResponse.json({error:'Invalid exposure'},{status:400});
   try{
     const sql=db();
-    const rows=await sql`SELECT assignment,status FROM sessions WHERE id=${id} AND credential_hash=${hashCredential(token)}`;
+    const rows=await sql`SELECT assignment,status,tactic_family FROM sessions WHERE id=${id} AND credential_hash=${hashCredential(token)}`;
     if(!rows.length)return NextResponse.json({error:'Unauthorized'},{status:401});
     const assignment=String(rows[0].assignment);
     if(assignment==='baseline_control'&&ordinal>0)return NextResponse.json({error:'Control violation'},{status:403});
@@ -39,11 +39,11 @@ export async function POST(req:NextRequest,ctx:{params:Promise<{id:string}>}) {
       VALUES(${id},${ordinal},${JSON.stringify(mutation)}::jsonb,${String(source)})
       ON CONFLICT(session_id,ordinal) DO NOTHING RETURNING id`;
     if(inserted.length) {
-      const assigned=assignedTactic(id);
+      const assigned=TACTIC_LIBRARY.find(t=>t.family===rows[0].tactic_family);
       const family = ordinal === 0 ? 'baseline' :
         assignment === 'static_control' ? 'scripted_' + mutation.strategy :
-        source === 'fallback' ? 'model_fallback' : assigned.family;
-      const version = assignment==='adaptive'&&source==='model' ? assigned.version : 1;
+        source === 'fallback' ? 'model_fallback' : assigned?.family ?? 'model_exploratory';
+      const version = assignment==='adaptive'&&source==='model' ? assigned?.version ?? 1 : 1;
       await sql`INSERT INTO tactics(strategy_family,strategy_version,definition)
         VALUES(${family},${version},${JSON.stringify({source,kind:'assigned_treatment',version:1})}::jsonb)
         ON CONFLICT(strategy_family,strategy_version) DO NOTHING`;
