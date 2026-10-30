@@ -20,6 +20,8 @@ export default function Home() {
   const [previousReload,setPreviousReload] = useState(false);
   const [mutation,setMutation] = useState<PageMutation>(BASE_MUTATION);
   const [source,setSource] = useState<'waiting'|'model'|'fallback'>('waiting');
+  const [assignment,setAssignment] = useState<string>('pending');
+  const exposureOrdinalRef = useRef(0);
   const [telemetryStatus,setTelemetryStatus] = useState<'pending'|'connected'|'offline'>('pending');
   const sessionRef = useRef<ReturnType<typeof createSession>|null>(null);
   const remoteRef = useRef<RemoteSession|null>(null);
@@ -32,6 +34,7 @@ export default function Home() {
   const stepRef = useRef(0);
   const nextAtRef = useRef<number|null>(null);
   const busyRef = useRef(false);
+  const exposeRef = useRef<(ordinal:number, value:PageMutation, source:string)=>void>(()=>{});
   const sendRef = useRef<(s:SessionSnapshot, reason?:LossReason)=>void>(()=>{});
   const startRemoteRef = useRef<()=>void>(()=>{});
 
@@ -52,6 +55,15 @@ export default function Home() {
       }).catch(()=>{if(!reason)setTelemetryStatus('offline');});
     };
     sendRef.current=send;
+    const expose=(ordinal:number,value:PageMutation,source:string)=>{
+      const remote=remoteRef.current;
+      if(!remote)return;
+      void fetch(`/api/sessions/${remote.id}/exposures`,{
+        method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${remote.credential}`},
+        body:JSON.stringify({ordinal,mutation:value,source}),keepalive:true,cache:'no-store'
+      }).catch(()=>setTelemetryStatus('offline'));
+    };
+    exposeRef.current=expose;
     startRemoteRef.current=()=>{
       startedRef.current=true;
       void fetch('/api/sessions',{method:'POST',cache:'no-store'}).then(async response=>{
@@ -59,7 +71,11 @@ export default function Home() {
         const data:unknown=await response.json();
         if(!validRemoteSession(data))throw new Error('Unexpected session response');
         remoteRef.current=data;
+        setAssignment(data.assignment);
         setTelemetryStatus('connected');
+        // Baseline was visible immediately at entry; record even for zero-mutation controls.
+        expose(0,BASE_MUTATION,'control');
+        if(data.assignment==='baseline_control')nextAtRef.current=null;
         // If the player lost before the session was created, immediately report that outcome.
         const loss=pendingLossRef.current;
         if(loss)send(session.snapshot(),loss);
@@ -87,11 +103,13 @@ export default function Home() {
         lastHeartbeatRef.current=s.elapsedMs;
         send(s);
       }
-      if(s.phase!=='playing'||document.hidden||!document.hasFocus()||busyRef.current||
+      if(s.phase!=='playing'||!remoteRef.current||document.hidden||!document.hasFocus()||busyRef.current||
           nextAtRef.current===null||s.elapsedMs<nextAtRef.current)return;
       busyRef.current=true;stepRef.current+=1;
       try {
-        const response=await fetch('/api/mutate',{method:'POST',headers:{'Content-Type':'application/json'},
+        const remote=remoteRef.current;
+        if(!remote)throw new Error('No session');
+        const response=await fetch('/api/mutate',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${remote.credential}`,'X-Session-ID':remote.id},
           body:JSON.stringify({elapsedSeconds:Math.floor(s.elapsedMs/1000),clicks:s.clicks,scrolls:s.scrolls,
           idleSeconds:Math.floor(s.idleMs/1000),step:stepRef.current,
           previousStrategies:strategiesRef.current.slice(-4),previousHeadline:mutationRef.current.headline})});
@@ -100,10 +118,11 @@ export default function Home() {
         const proposed=validateMutation(data.mutation);
         if(proposed&&session.snapshot().phase==='playing'&&document.hasFocus()&&!document.hidden){
           mutationRef.current=proposed;setMutation(proposed);
+          expose(++exposureOrdinalRef.current,proposed,data.source==='model'?'model':data.source==='control'?'control':'fallback');
           strategiesRef.current.push(proposed.strategy);
           if(strategiesRef.current.length>10)strategiesRef.current.shift();
           setSource(data.source==='model'?'model':'fallback');
-          nextAtRef.current=session.snapshot().elapsedMs+proposed.nextDelaySeconds*1000;
+          nextAtRef.current=remoteRef.current?.assignment==='baseline_control'?null:session.snapshot().elapsedMs+proposed.nextDelaySeconds*1000;
         }else nextAtRef.current=session.snapshot().elapsedMs+30000;
       }catch{nextAtRef.current=session.snapshot().elapsedMs+30000;setSource('fallback');}
       finally{busyRef.current=false;}
@@ -176,7 +195,7 @@ export default function Home() {
       <p className="muted">{snapshot.phase==='lost'?'Final survival time':upcoming?`Next milestone: ${formatElapsed(upcoming.target*1000)} · ${milestoneCount} reached`:'Every milestone reached. Still here.'}</p>
     </section>
     <footer className="footer">
-      <p className="muted">{playing?`The page is adapting · ${source==='model'?'AI-generated':source==='fallback'?'scripted fallback':'first change pending'} · telemetry ${telemetryStatus} · focus loss ends the round.`:'Focus loss ends a round. Session outcomes are recorded anonymously when telemetry is available.'}</p>
+      <p className="muted">{playing?`Assignment ${assignment} · ${source==='model'?'AI-generated':source==='fallback'?'scripted fallback':'first change pending'} · telemetry ${telemetryStatus} · focus loss ends the round.`:'Focus loss ends a round. Session outcomes are recorded anonymously when telemetry is available.'}</p>
       {playing&&<button type="button" onClick={concede}>{mutation.actionLabel}</button>}
     </footer>
   </main>;
