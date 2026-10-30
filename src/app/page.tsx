@@ -1,0 +1,1 @@
+export default function Home() { return <main className="shell"><p className="eyebrow">PDNRH / EXPERIMENT 001</p><h1>PLEASE DO NOT<br />REMAIN HERE.</h1><p>There is nothing you need to do.</p><p>Just remain here.</p><p className="footnote">The experiment has not begun.</p></main>; }
