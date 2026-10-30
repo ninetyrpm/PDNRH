@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashCredential } from '@/lib/experiment';
 import { validateMutation, BASE_MUTATION, fallbackMutation } from '@/lib/mutation';
+import { assignedTactic } from '@/lib/tactics';
 
 export const runtime='nodejs';
 function sameMutation(a: NonNullable<ReturnType<typeof validateMutation>>, b: NonNullable<ReturnType<typeof validateMutation>>) {
@@ -38,14 +39,16 @@ export async function POST(req:NextRequest,ctx:{params:Promise<{id:string}>}) {
       VALUES(${id},${ordinal},${JSON.stringify(mutation)}::jsonb,${String(source)})
       ON CONFLICT(session_id,ordinal) DO NOTHING RETURNING id`;
     if(inserted.length) {
+      const assigned=assignedTactic(id);
       const family = ordinal === 0 ? 'baseline' :
         assignment === 'static_control' ? 'scripted_' + mutation.strategy :
-        source === 'fallback' ? 'model_fallback' : 'model_exploratory';
+        source === 'fallback' ? 'model_fallback' : assigned.family;
+      const version = assignment==='adaptive'&&source==='model' ? assigned.version : 1;
       await sql`INSERT INTO tactics(strategy_family,strategy_version,definition)
-        VALUES(${family},1,${JSON.stringify({source,kind:'experiment_family',version:1})}::jsonb)
+        VALUES(${family},${version},${JSON.stringify({source,kind:'assigned_treatment',version:1})}::jsonb)
         ON CONFLICT(strategy_family,strategy_version) DO NOTHING`;
       await sql`UPDATE exposures SET tactic_id=(
-        SELECT id FROM tactics WHERE strategy_family=${family} AND strategy_version=1
+        SELECT id FROM tactics WHERE strategy_family=${family} AND strategy_version=${version}
       ) WHERE session_id=${id} AND ordinal=${ordinal} AND tactic_id IS NULL`;
       // Requests may arrive out of order. Determine exposure windows by ordinal,
       // never by network arrival order; terminal times cap the final window.
