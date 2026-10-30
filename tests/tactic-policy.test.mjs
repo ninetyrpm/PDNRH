@@ -5,14 +5,14 @@ import ts from 'typescript';
 const text=fs.readFileSync(new URL('../src/lib/tactic-policy.ts',import.meta.url),'utf8');
 const js=ts.transpileModule(text,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 // Avoid importing application aliases: the static tactic library is the only dependency.
+const {createHash}=await import('node:crypto');
+const requireCrypto={createHash};
 const exports={};
 new Function('exports','require',js)(exports,(name)=>{
   if(name==='node:crypto')return requireCrypto;
   if(name==='./tactics')return {TACTIC_LIBRARY:[{family:'closure_frame'},{family:'curiosity_reversal'},{family:'absurdist_deflation'}]};
   throw Error(name);
 });
-const {createHash}=await import('node:crypto');
-const requireCrypto={createHash};
 test('uniform until both cohort and arm sample floors',()=>{
   assert.deepEqual(exports.calculateWeights({baselineCompleted:29,arms:[]}).weights,[1/3,1/3,1/3]);
   const arms=['closure_frame','curiosity_reversal','absurdist_deflation'].map((family,i)=>({family,completed:30,meanElapsedMs:2000+i*1000}));
