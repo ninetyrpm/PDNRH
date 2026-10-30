@@ -2,20 +2,13 @@
 
 A human tries to stay focused; an adaptive page tries to persuade them to leave.
 
-## PD04A — Persistence foundation
+## PD04B — Session lifecycle telemetry
 
-The Vercel Neon integration provides `DATABASE_URL` (pooled connection). Do not prefix it with `NEXT_PUBLIC_` or commit its contents.
+The existing Vercel Neon integration provides `DATABASE_URL`. Apply `db/migrations/0001_initial.sql` before deploying (already applied to the production Neon database).
 
-1. Open the **Neon SQL Editor**, select the production database, and execute `db/migrations/0001_initial.sql`. This is a versioned, transactional migration.
-2. Deploy current `main` on Vercel. `POST /api/sessions` then creates an opaque server-side session with a 256-bit credential, a hashed credential in Postgres, and a randomized experiment assignment (80% adaptive / 10% static control / 10% baseline control). The credential is returned once and must not be logged.
-3. Optionally run `DATABASE_URL='...' node scripts/check-schema.mjs` in a secure environment to check the migration.
-4. The game client is **not yet connected** to the session API; PD04B will integrate lifecycle telemetry and require authorization for session updates. No visitor events are saved by this increment.
+Each round starts immediately on click and independently attempts to create a durable Neon session through `POST /api/sessions`. The resulting random credential is retained in browser memory only and never written to storage. Every ~15 seconds a compact heartbeat is submitted. On focus loss, visibility loss, navigation, or concession, a terminal loss event is attempted with `fetch(..., keepalive:true)`, even when the session creation request finishes after the loss. The backend checks the hashed credential, validates bounded numeric counters, enforces terminal-once state transitions, and uses unique event keys to deduplicate telemetry.
 
-The tables `sessions`, `tactics`, `exposures`, `events`, and `outcomes` are prepared for subsequent PD04 increments. SQL migration must be applied before calling the session creation endpoint. Schema initialization is intentionally not done at runtime.
-
-## PD03 — LLM mutation
-
-Set `OPENAI_API_KEY` and optionally `OPENAI_MODEL` in Vercel. Mutations use a validated text-only DSL, and the game still operates with scripted fallback if model access is unavailable.
+**Operational caveats:** Network failures never block the game; telemetry status is shown locally. Browser unload delivery is best effort, so abandoned sessions remain `active` until a future lease-reconciliation job (PD04D) classifies them. API-origin sessions are not proof of a real focused visitor; these are client-reported outcomes. The server stores no IP addresses or raw pointer coordinates. Assignment cohorts are recorded but are **not yet applied to mutation selection**; PD04C will implement controls and exposures. No schema changes are required for PD04B.
 
 ## Development
 
@@ -28,6 +21,7 @@ npm run lint
 npm run build
 ```
 
-## Game rules
+## Future
 
-Switching window, tab, minimizing, navigating, reloading, or conceding ends an active round. The focus loss signal is client-observed and may be triggered by OS interruptions; definitive attribution and durable outcome classification are future work.
+PD04C: exposure logging and control assignment enforcement.
+PD04D: integrity checks, expiration reconciliation, diagnostics and durable rate limits.
