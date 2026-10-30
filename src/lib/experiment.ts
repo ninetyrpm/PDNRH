@@ -25,10 +25,15 @@ export async function openExperimentSession() {
     AND tactic_family IS NOT NULL GROUP BY tactic_family`;
   const evidence = { baselineCompleted: Number(cohorts[0]?.n ?? 0),
     arms: arms.map(r => ({family:String(r.family), completed:Number(r.completed), meanElapsedMs:Number(r.mean_elapsed_ms)})) };
-  const selection = calculateWeights(evidence);
+  const governance=await sql`SELECT mode,revision FROM experiment_policy_control WHERE singleton=true`;
+  const mode=String(governance[0]?.mode??'uniform');
+  const revision=Number(governance[0]?.revision??1);
+  const calculated=calculateWeights(evidence);
+  const selection=mode==='eligible_preference'&&calculated.eligible ? calculated :
+    {weights:Array(3).fill(1/3) as number[],policy:'uniform-v1',eligible:false};
   const tactic = assignment==='adaptive' ? selectTactic(id,selection.weights) : null;
   await sql`INSERT INTO sessions(id,credential_hash,assignment,tactic_family,tactic_policy)
-    VALUES(${id},${hashCredential(credential)},${assignment},${tactic?.family ?? null},${tactic ? selection.policy : 'control-v1'})`;
+    VALUES(${id},${hashCredential(credential)},${assignment},${tactic?.family ?? null},${tactic ? selection.policy+'-governance-r'+revision : 'control-v1'})`;
   // Create the baseline exposure before returning credentials, so a rapid exit
   // cannot race its insertion. Retried clients cannot create duplicate ordinals.
   await sql`INSERT INTO exposures(session_id,ordinal,mutation,source)
