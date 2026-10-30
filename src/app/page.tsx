@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createSession, formatElapsed, nextMilestone, type SessionSnapshot, type LossReason } from '@/lib/session';
 import { BASE_MUTATION, validateMutation, type PageMutation } from '@/lib/mutation';
+import { validRemoteSession, telemetryPayload, type RemoteSession } from '@/lib/telemetry';
 
 const THRESHOLDS = [60,180,600,1800,3600];
 const STORAGE_KEY = 'pdnrh-active-round';
@@ -19,23 +20,59 @@ export default function Home() {
   const [previousReload,setPreviousReload] = useState(false);
   const [mutation,setMutation] = useState<PageMutation>(BASE_MUTATION);
   const [source,setSource] = useState<'waiting'|'model'|'fallback'>('waiting');
+  const [telemetryStatus,setTelemetryStatus] = useState<'pending'|'connected'|'offline'>('pending');
   const sessionRef = useRef<ReturnType<typeof createSession>|null>(null);
+  const remoteRef = useRef<RemoteSession|null>(null);
+  const startedRef = useRef(false);
+  const sequenceRef = useRef(0);
+  const lastHeartbeatRef = useRef(0);
+  const pendingLossRef = useRef<LossReason|null>(null);
   const mutationRef = useRef(BASE_MUTATION);
   const strategiesRef = useRef<string[]>([]);
   const stepRef = useRef(0);
   const nextAtRef = useRef<number|null>(null);
   const busyRef = useRef(false);
+  const sendRef = useRef<(s:SessionSnapshot, reason?:LossReason)=>void>(()=>{});
+  const startRemoteRef = useRef<()=>void>(()=>{});
+
   useEffect(() => {
     const session = createSession();
     sessionRef.current = session;
     try {setPreviousReload(sessionStorage.getItem(STORAGE_KEY)==='playing');sessionStorage.removeItem(STORAGE_KEY);} catch {}
     setSnapshot(session.snapshot()); setReady(true);
     const update=()=>setSnapshot(session.snapshot());
+    const send=(s:SessionSnapshot, reason?:LossReason)=>{
+      const remote=remoteRef.current;
+      if(!remote)return;
+      const payload=JSON.stringify(telemetryPayload(s,++sequenceRef.current,reason));
+      // keepalive allows terminal delivery during blur, navigation, or pagehide.
+      void fetch(`/api/sessions/${remote.id}/events`,{
+        method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${remote.credential}`},
+        body:payload,keepalive:!!reason,cache:'no-store'
+      }).catch(()=>{if(!reason)setTelemetryStatus('offline');});
+    };
+    sendRef.current=send;
+    startRemoteRef.current=()=>{
+      startedRef.current=true;
+      void fetch('/api/sessions',{method:'POST',cache:'no-store'}).then(async response=>{
+        if(!response.ok)throw new Error('Session start failed');
+        const data:unknown=await response.json();
+        if(!validRemoteSession(data))throw new Error('Unexpected session response');
+        remoteRef.current=data;
+        setTelemetryStatus('connected');
+        // If the player lost before the session was created, immediately report that outcome.
+        const loss=pendingLossRef.current;
+        if(loss)send(session.snapshot(),loss);
+      }).catch(()=>setTelemetryStatus('offline'));
+    };
     const lose=(reason:LossReason)=>{
+      if(session.snapshot().phase!=='playing')return;
       session.lose(reason);
+      pendingLossRef.current=reason;
       nextAtRef.current=null;
       try{sessionStorage.removeItem(STORAGE_KEY);}catch{}
       update();
+      send(session.snapshot(),reason);
     };
     const onBlur=()=>lose('blur');
     const onVisibility=()=>{if(document.hidden)lose('hidden');};
@@ -45,27 +82,30 @@ export default function Home() {
     const onActivity=()=>session.record('activity');
 
     async function tick() {
-      const s=session.snapshot(); setSnapshot(s);
+      const s=session.snapshot();setSnapshot(s);
+      if(s.phase==='playing' && remoteRef.current && s.elapsedMs-lastHeartbeatRef.current>=15000) {
+        lastHeartbeatRef.current=s.elapsedMs;
+        send(s);
+      }
       if(s.phase!=='playing'||document.hidden||!document.hasFocus()||busyRef.current||
-          nextAtRef.current===null||s.elapsedMs<nextAtRef.current) return;
-      busyRef.current=true;
-      stepRef.current+=1;
+          nextAtRef.current===null||s.elapsedMs<nextAtRef.current)return;
+      busyRef.current=true;stepRef.current+=1;
       try {
         const response=await fetch('/api/mutate',{method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({elapsedSeconds:Math.floor(s.elapsedMs/1000),clicks:s.clicks,scrolls:s.scrolls,
           idleSeconds:Math.floor(s.idleMs/1000),step:stepRef.current,
           previousStrategies:strategiesRef.current.slice(-4),previousHeadline:mutationRef.current.headline})});
-        if(!response.ok) throw new Error('Mutation request failed');
+        if(!response.ok)throw new Error('Mutation request failed');
         const data=await response.json();
         const proposed=validateMutation(data.mutation);
-        if(proposed&&session.snapshot().phase==='playing'&&document.hasFocus()&&!document.hidden) {
+        if(proposed&&session.snapshot().phase==='playing'&&document.hasFocus()&&!document.hidden){
           mutationRef.current=proposed;setMutation(proposed);
           strategiesRef.current.push(proposed.strategy);
-          if(strategiesRef.current.length>10) strategiesRef.current.shift();
+          if(strategiesRef.current.length>10)strategiesRef.current.shift();
           setSource(data.source==='model'?'model':'fallback');
           nextAtRef.current=session.snapshot().elapsedMs+proposed.nextDelaySeconds*1000;
-        } else nextAtRef.current=session.snapshot().elapsedMs+30000;
-      } catch {nextAtRef.current=session.snapshot().elapsedMs+30000;setSource('fallback');}
+        }else nextAtRef.current=session.snapshot().elapsedMs+30000;
+      }catch{nextAtRef.current=session.snapshot().elapsedMs+30000;setSource('fallback');}
       finally{busyRef.current=false;}
     }
     const interval=window.setInterval(tick,250);
@@ -89,18 +129,23 @@ export default function Home() {
     };
   },[]);
   const begin=()=>{
-    if(!document.hasFocus()||document.hidden)return;
+    if(!document.hasFocus()||document.hidden||startedRef.current)return;
     sessionRef.current?.start();
     nextAtRef.current=5000;
     try{sessionStorage.setItem(STORAGE_KEY,'playing');}catch{}
     setPreviousReload(false);
     setSnapshot(sessionRef.current?.snapshot()??INITIAL);
+    startRemoteRef.current();
   };
   const concede=()=>{
-    sessionRef.current?.lose('concede');
+    if(sessionRef.current?.snapshot().phase!=='playing')return;
+    sessionRef.current.lose('concede');
+    pendingLossRef.current='concede';
     nextAtRef.current=null;
     try{sessionStorage.removeItem(STORAGE_KEY);}catch{}
-    setSnapshot(sessionRef.current?.snapshot()??INITIAL);
+    const s=sessionRef.current.snapshot();
+    setSnapshot(s);
+    sendRef.current(s,'concede');
   };
   const seconds=Math.floor(snapshot.elapsedMs/1000);
   const upcoming=nextMilestone(seconds,THRESHOLDS);
@@ -131,7 +176,7 @@ export default function Home() {
       <p className="muted">{snapshot.phase==='lost'?'Final survival time':upcoming?`Next milestone: ${formatElapsed(upcoming.target*1000)} · ${milestoneCount} reached`:'Every milestone reached. Still here.'}</p>
     </section>
     <footer className="footer">
-      <p className="muted">{playing?`The page is adapting · ${source==='model'?'AI-generated':source==='fallback'?'scripted fallback':'first change pending'} · focus loss ends the round.`:'Focus loss ends a round. No results are stored on a server.'}</p>
+      <p className="muted">{playing?`The page is adapting · ${source==='model'?'AI-generated':source==='fallback'?'scripted fallback':'first change pending'} · telemetry ${telemetryStatus} · focus loss ends the round.`:'Focus loss ends a round. Session outcomes are recorded anonymously when telemetry is available.'}</p>
       {playing&&<button type="button" onClick={concede}>{mutation.actionLabel}</button>}
     </footer>
   </main>;
