@@ -1,14 +1,21 @@
 # PLEASE DO NOT REMAIN HERE
 
-An adversarial attention experiment. The visitor must keep the game tab in focus; the AI attempts to persuade a voluntary exit.
+A human tries to stay focused; an adaptive page tries to persuade them to leave.
 
-## PD03 — First page mutation engine
+## PD04A — Persistence foundation
 
-A round begins with an explicit consent gate. Five seconds after entry, the page requests its first tactic; subsequent mutations are scheduled 15–90 seconds apart. Model output is validated against a fixed, text-only schema. The model can change headline, copy, three predefined visual styles, layout, and the wording of the concession button, but it cannot run JavaScript, navigate, alter the timer, intercept focus, or change win conditions. Model text is always escaped by React.
+The Vercel Neon integration provides `DATABASE_URL` (pooled connection). Do not prefix it with `NEXT_PUBLIC_` or commit its contents.
 
-The server calls OpenAI's Chat Completions API using `OPENAI_API_KEY` and optional `OPENAI_MODEL` (default `gpt-4.1-mini`). The key stays on the server. Without a key, or on provider failures/invalid responses, the endpoint uses locally scripted tactics and identifies that fallback in the UI. Best-effort per-instance 12-second IP cooldown protects the public route; production-scale throttling, persistent experiment outcomes, and durable server-side sessions remain for PD04. Because the endpoint is public, do not configure an uncapped API budget.
+1. Open the **Neon SQL Editor**, select the production database, and execute `db/migrations/0001_initial.sql`. This is a versioned, transactional migration.
+2. Deploy current `main` on Vercel. `POST /api/sessions` then creates an opaque server-side session with a 256-bit credential, a hashed credential in Postgres, and a randomized experiment assignment (80% adaptive / 10% static control / 10% baseline control). The credential is returned once and must not be logged.
+3. Optionally run `DATABASE_URL='...' node scripts/check-schema.mjs` in a secure environment to check the migration.
+4. The game client is **not yet connected** to the session API; PD04B will integrate lifecycle telemetry and require authorization for session updates. No visitor events are saved by this increment.
 
-The model receives compact counters and recent tactic names, not raw user activity or history. PD03 is adaptive within one round; **it does not yet learn across visitors**.
+The tables `sessions`, `tactics`, `exposures`, `events`, and `outcomes` are prepared for subsequent PD04 increments. SQL migration must be applied before calling the session creation endpoint. Schema initialization is intentionally not done at runtime.
+
+## PD03 — LLM mutation
+
+Set `OPENAI_API_KEY` and optionally `OPENAI_MODEL` in Vercel. Mutations use a validated text-only DSL, and the game still operates with scripted fallback if model access is unavailable.
 
 ## Development
 
@@ -21,8 +28,6 @@ npm run lint
 npm run build
 ```
 
-Copy `.env.example` to `.env.local` for local development or set the same variables in Vercel project Settings → Environment Variables, then redeploy. No Neon database is needed yet.
+## Game rules
 
-## Game mechanics
-
-The first `blur`, hidden `visibilitychange`, or `pagehide` after BEGIN ends the round and freezes the clock. Explicit concession also ends it. `sessionStorage` stores a best-effort local active-round marker for reload detection. Cross-tab persistence and definitive departure accounting require a backend.
+Switching window, tab, minimizing, navigating, reloading, or conceding ends an active round. The focus loss signal is client-observed and may be triggered by OS interruptions; definitive attribution and durable outcome classification are future work.
