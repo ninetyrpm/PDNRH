@@ -1,12 +1,14 @@
 # PLEASE DO NOT REMAIN HERE
 
-A human wants to stay. A website wants the human to leave.
+An adversarial attention experiment. The visitor must keep the game tab in focus; the AI attempts to persuade a voluntary exit.
 
-## PD02.1 — Focus is survival
+## PD03 — First page mutation engine
 
-Rounds have an explicit **BEGIN EXPERIMENT** gate. Once begun, the first browser `blur`, hidden-document `visibilitychange`, or `pagehide` ends the game; **I GIVE UP** does the same. The clock freezes permanently on loss and the page shows the reason. A reload of an active game displays a notice that the previous round ended. Reloading after a loss starts a fresh ready state.
+A round begins with an explicit consent gate. Five seconds after entry, the page requests its first tactic; subsequent mutations are scheduled 15–90 seconds apart. Model output is validated against a fixed, text-only schema. The model can change headline, copy, three predefined visual styles, layout, and the wording of the concession button, but it cannot run JavaScript, navigate, alter the timer, intercept focus, or change win conditions. Model text is always escaped by React.
 
-Important constraints: browser focus/visibility events can fire for operating system interruptions and are not proof of voluntary departure; closing a tab cannot display the loss page. PD02.1 persists only a local active-round marker in sessionStorage (not analytics or a durable record). Clearing storage or opening a different tab bypasses cross-load accounting. A backend is required for tamper-resistant outcome tracking.
+The server calls OpenAI's Chat Completions API using `OPENAI_API_KEY` and optional `OPENAI_MODEL` (default `gpt-4.1-mini`). The key stays on the server. Without a key, or on provider failures/invalid responses, the endpoint uses locally scripted tactics and identifies that fallback in the UI. Best-effort per-instance 12-second IP cooldown protects the public route; production-scale throttling, persistent experiment outcomes, and durable server-side sessions remain for PD04. Because the endpoint is public, do not configure an uncapped API budget.
+
+The model receives compact counters and recent tactic names, not raw user activity or history. PD03 is adaptive within one round; **it does not yet learn across visitors**.
 
 ## Development
 
@@ -19,14 +21,8 @@ npm run lint
 npm run build
 ```
 
-## Deploy
+Copy `.env.example` to `.env.local` for local development or set the same variables in Vercel project Settings → Environment Variables, then redeploy. No Neon database is needed yet.
 
-Import `ninetyrpm/PDNRH` into Vercel using Next.js. No environment variables yet.
+## Game mechanics
 
-## Roadmap
-
-- **PD001** — Next.js foundation
-- **PD02** — visitor timer and milestones
-- **PD02.1** — focus-based terminal outcome and explicit entry
-- **PD03** — schema-validated LLM page mutation
-- **PD04–PD06** — Neon persistence, experiment learning, observatory
+The first `blur`, hidden `visibilitychange`, or `pagehide` after BEGIN ends the round and freezes the clock. Explicit concession also ends it. `sessionStorage` stores a best-effort local active-round marker for reload detection. Cross-tab persistence and definitive departure accounting require a backend.
