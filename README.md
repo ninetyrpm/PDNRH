@@ -1,17 +1,18 @@
 # PLEASE DO NOT REMAIN HERE
 
-A visitor tries to stay focused; an adversarial webpage tries to persuade them to leave.
+## PD05A — Observational evidence (no adaptive learning yet)
 
-## PD04D — Integrity and reconciliation
+The database migration `db/migrations/0002_evidence_views.sql` creates three read-only views:
 
-- Baseline exposure is inserted by the server immediately after the session is created, not via an unreliable client-side race.
-- Mutation exposures are authenticated, validated, idempotent by session/ordinal, and their windows are rederived from ordinal ordering.
-- A terminal loss closes open exposures. Timing is server-observed, not guaranteed browser render time.
-- `db/maintenance/diagnostics.sql` provides read-only operational diagnostics.
-- `db/maintenance/reconcile.sql` is a **manual, repeatable** maintenance routine to close historical exposures and classify stale active sessions as **uncertain** after 3 minutes without a heartbeat. Periodic scheduling is not implemented.
-- Missing historical baseline exposures are not fabricated. Outcomes are client reports; lost telemetry cannot prove voluntary departure.
+- `pdnrh_session_evidence`: one row per round, including assignment, exposure completeness, observed duration, confirmed loss, uncertain/censored status.
+- `pdnrh_cohort_evidence`: raw counts by *randomized* assignment, with uncertain/active sessions reported separately.
+- `pdnrh_tactic_observations`: exposure order and duration, observed final exposure before a reported loss. This is **temporal association, not causal attribution**.
 
-The PD04A schema has already been applied to Neon. PD04D adds no new schema or Vercel secrets.
+Stable tactic identities are stored in `tactics`: `baseline`, `scripted_<strategy>`, `model_fallback`, and `model_exploratory`. The model-provided `mutation.strategy` string is retained as a claimed strategy label, but it is not treated as a reproducible treatment. Model-generated copy is grouped under an explicitly exploratory category.
+
+**Do not compare simple confirmed-loss average durations as unbiased causal estimates.** Those omit censored/ongoing observations and users can appear in multiple sessions. Our current few sessions do not justify a learning policy.
+
+PD05A does not alter the existing game selector. PD05B should introduce a finite, versioned tactic library with predeclared variants, consistent exposure windows, and sufficient randomized samples before using a bandit algorithm. No admin dashboard or automatic scheduling is added.
 
 ## Development
 
@@ -22,7 +23,3 @@ npm run typecheck
 npm run lint
 npm run build
 ```
-
-## Roadmap
-
-PD05: randomized experimental evaluation, stable tactic identities, and evidence-based learning.
