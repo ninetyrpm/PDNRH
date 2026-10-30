@@ -53,11 +53,26 @@ export async function POST(request: NextRequest) {
       response = await fetch('https://api.openai.com/v1/chat/completions', {
         method:'POST',signal:controller.signal,
         headers:{'Authorization':`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},
-        body:JSON.stringify({model:process.env.OPENAI_MODEL || 'gpt-4.1-mini',temperature:0.9,max_completion_tokens:750,response_format:{type:'json_object'},
+        body:JSON.stringify({model:process.env.OPENAI_MODEL || 'gpt-4.1-mini',max_completion_tokens:1400,response_format:{type:'json_object'},
           messages:[{role:'system',content:SYSTEM},{role:'user',content:JSON.stringify(input)}]})
       });
     } finally { clearTimeout(timeout); }
-    if (!response.ok) { console.error('[pdnrh:mutation] provider_error', { status: response.status, model: process.env.OPENAI_MODEL || 'gpt-4.1-mini' }); return NextResponse.json({mutation:fallback,source:'fallback',fallbackReason:'provider_error'},{headers:{'Cache-Control':'no-store'}}); }
+    if (!response.ok) {
+      // Report only provider-supplied error metadata; never log request headers or credentials.
+      let code = 'unknown', parameter = 'unknown', category = 'unknown';
+      try {
+        const result = await response.json();
+        const error = result?.error;
+        if (typeof error?.code === 'string') code = error.code.slice(0, 100);
+        if (typeof error?.param === 'string') parameter = error.param.slice(0, 100);
+        if (typeof error?.type === 'string') category = error.type.slice(0, 100);
+      } catch { /* Some providers return non-JSON errors. */ }
+      console.error('[pdnrh:mutation] provider_error', {
+        status: response.status, model: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
+        code, parameter, category
+      });
+      return NextResponse.json({mutation:fallback,source:'fallback',fallbackReason:'provider_error'},{headers:{'Cache-Control':'no-store'}});
+    }
     const data = await response.json();
     const raw = data?.choices?.[0]?.message?.content;
     const mutation = validateMutation(typeof raw === 'string' ? JSON.parse(raw) : null);
