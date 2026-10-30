@@ -1,8 +1,8 @@
 import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { observatoryAuthorized } from '@/lib/observatory-auth';
-import Unlock from '../unlock';
-import '../observatory.css';
+import Unlock from '../../unlock';
+import '../../observatory.css';
 
 export const dynamic='force-dynamic';
 export const runtime='nodejs';
