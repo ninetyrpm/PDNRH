@@ -38,6 +38,15 @@ export async function POST(req:NextRequest,ctx:{params:Promise<{id:string}>}) {
       VALUES(${id},${ordinal},${JSON.stringify(mutation)}::jsonb,${String(source)})
       ON CONFLICT(session_id,ordinal) DO NOTHING RETURNING id`;
     if(inserted.length) {
+      const family = ordinal === 0 ? 'baseline' :
+        assignment === 'static_control' ? 'scripted_' + mutation.strategy :
+        source === 'fallback' ? 'model_fallback' : 'model_exploratory';
+      await sql`INSERT INTO tactics(strategy_family,strategy_version,definition)
+        VALUES(${family},1,${JSON.stringify({source,kind:'experiment_family',version:1})}::jsonb)
+        ON CONFLICT(strategy_family,strategy_version) DO NOTHING`;
+      await sql`UPDATE exposures SET tactic_id=(
+        SELECT id FROM tactics WHERE strategy_family=${family} AND strategy_version=1
+      ) WHERE session_id=${id} AND ordinal=${ordinal} AND tactic_id IS NULL`;
       // Requests may arrive out of order. Determine exposure windows by ordinal,
       // never by network arrival order; terminal times cap the final window.
       await sql`WITH windows AS (

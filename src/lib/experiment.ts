@@ -25,5 +25,11 @@ export async function openExperimentSession() {
   await sql`INSERT INTO exposures(session_id,ordinal,mutation,source)
     VALUES(${id},0,${JSON.stringify(BASE_MUTATION)}::jsonb,'control')
     ON CONFLICT(session_id,ordinal) DO NOTHING`;
+  await sql`INSERT INTO tactics(strategy_family,strategy_version,definition)
+    VALUES('baseline',1,'{"kind":"control","version":1}'::jsonb)
+    ON CONFLICT(strategy_family,strategy_version) DO NOTHING`;
+  await sql`UPDATE exposures SET tactic_id=(
+    SELECT id FROM tactics WHERE strategy_family='baseline' AND strategy_version=1
+  ) WHERE session_id=${id} AND ordinal=0 AND tactic_id IS NULL`;
   return { id, credential, assignment, startedAt: new Date().toISOString() };
 }
