@@ -23,3 +23,9 @@ npm run typecheck
 npm run lint
 npm run build
 ```
+
+## PD05C — Conservative selection
+
+Migration `0003_tactic_assignment.sql` adds immutable per-session `tactic_family` and `tactic_policy` fields. For adaptive sessions, the server checks completed experimental observations and preassigns a treatment when opening the session. New sessions use `uniform-v1` while any tactic family has fewer than 30 confirmed-loss observations or baseline control has fewer than 30. After the threshold, `bounded-v1` retains 20% allocation for every family and 40% additional probability for the family with shortest observed mean time to loss. This is an exploratory observational heuristic, **not** evidence of a causal difference or proof of improvement. Session selection is stable once recorded and controls remain allocated 80/10/10.
+
+The policy explicitly excludes active and uncertain records, but confirmed-loss-only means remain subject to censoring, repeated-player effects, exposure timing artifacts and self-selection. This policy must be reviewed before calling it scientifically validated. No background scheduler is added.
