@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { db } from '@/lib/db';
 import { observatoryAuthorized } from '@/lib/observatory-auth';
 import Unlock from '../../unlock';
+import Replay from './replay';
+import { validateMutation } from '@/lib/mutation';
 import '../../observatory.css';
 
 export const dynamic='force-dynamic';
@@ -33,6 +35,7 @@ export default async function SessionInspector({params}:{params:Promise<{id:stri
       <div><span>STATUS</span><strong>{text(s.status)} / {text(s.loss_reason)}</strong></div><div><span>SURVIVAL</span><strong>{secs(s.elapsed_ms)}</strong></div>
       <div><span>STARTED</span><strong>{stamp(s.started_at)}</strong></div><div><span>ENDED</span><strong>{stamp(s.ended_at)}</strong></div>
     </div>
+    <section><h2>VISUAL SESSION REPLAY</h2><Replay startedAt={new Date(String(s.started_at)).getTime()} endedAt={s.ended_at?new Date(String(s.ended_at)).getTime():null} frames={exposures.flatMap(e=>{const mutation=validateMutation(e.mutation);return mutation?[{ordinal:Number(e.ordinal),source:String(e.source),start:new Date(String(e.displayed_at)).getTime(),end:e.ended_at?new Date(String(e.ended_at)).getTime():null,mutation}]:[];})}/></section>
     <section><h2>EXPOSURE TIMELINE / {exposures.length} RECORDS</h2>
       <p className="obs-note">Times are server-observed; they are not precise proof of when pixels appeared in the browser. Each card contains the exact recorded mutation payload.</p>
       {exposures.map(e=>{const m=(e.mutation??{}) as Mutation;const duration=e.ended_at&&e.displayed_at?Math.max(0,(new Date(String(e.ended_at)).getTime()-new Date(String(e.displayed_at)).getTime())/1000).toFixed(1)+'s':'OPEN';
