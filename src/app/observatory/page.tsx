@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { observatoryAuthorized } from '@/lib/observatory-auth';
 import Unlock from './unlock';
 import Analysis from './analysis';
+import Evaluation from './evaluation';
 import './observatory.css';
 
 export const dynamic='force-dynamic';
@@ -32,6 +33,7 @@ export default async function Observatory(){
       <p className="obs-note">Experimental observations, not causal claims. Reported departures may reflect ordinary navigation, and outcomes are not independent when visitors repeat sessions.</p>
       <div className="obs-metrics"><div><strong>{quality[0]?.total??0}</strong><span>Total sessions</span></div><div><strong>{quality[0]?.uncertain??0}</strong><span>Uncertain outcomes</span></div><div><strong>{quality[0]?.stale??0}</strong><span>Stale active sessions</span></div></div>
       <section><h2>COHORTS</h2><div className="obs-table-wrap"><table><thead><tr><th>Assignment</th><th>Sessions</th><th>Confirmed losses</th><th>Uncertain</th><th>Active</th><th>Baseline logged</th><th>Mean observed survival</th></tr></thead><tbody>{cohorts.map(x=><tr key={String(x.assignment)}><td>{String(x.assignment)}</td><td>{String(x.sessions)}</td><td>{String(x.confirmed_losses)}</td><td>{String(x.uncertain_sessions)}</td><td>{String(x.active_sessions)}</td><td>{String(x.sessions_with_baseline)}</td><td>{seconds(x.mean_confirmed_loss_ms)}</td></tr>)}</tbody></table></div><p className="obs-note">Mean survival includes only confirmed losses. Censored and ongoing sessions are excluded, creating potential selection bias.</p></section>
+      <Evaluation/>
       <Analysis/>
       <section><h2>TACTIC FAMILIES</h2><div className="obs-table-wrap"><table><thead><tr><th>Family</th><th>Version</th><th>Exposures</th><th>Sessions</th></tr></thead><tbody>{arms.map(x=><tr key={String(x.strategy_family)+'-'+String(x.strategy_version)}><td>{String(x.strategy_family)}</td><td>{String(x.strategy_version)}</td><td>{String(x.exposures)}</td><td>{String(x.sessions)}</td></tr>)}</tbody></table></div></section>
       <section><h2>RECENT SESSIONS</h2><div className="obs-table-wrap"><table><thead><tr><th>Started</th><th>ID</th><th>Assignment</th><th>Tactic</th><th>Policy</th><th>Status / Reason</th><th>Survival</th><th>Exposures</th><th>Baseline</th><th>Open</th></tr></thead><tbody>{sessions.map(x=><tr key={String(x.id)}><td>{formatTime(x.started_at)}</td><td><a className="obs-session-link" href={'/observatory/sessions/'+String(x.id)}><code>{String(x.id).slice(0,8)}</code></a></td><td>{String(x.assignment)}</td><td>{String(x.tactic_family??'—')}</td><td>{String(x.tactic_policy??'legacy')}</td><td>{String(x.status)} / {String(x.loss_reason??'—')}</td><td>{seconds(x.elapsed_ms)}</td><td>{String(x.exposures)}</td><td>{String(x.baselines)}</td><td>{String(x.open_exposures)}</td></tr>)}</tbody></table></div></section>
