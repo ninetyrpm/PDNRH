@@ -3,6 +3,7 @@ import { observatoryAuthorized } from '@/lib/observatory-auth';
 import Unlock from './unlock';
 import Analysis from './analysis';
 import Evaluation from './evaluation';
+import Operations from './operations';
 import PolicyControls from './policy-controls';
 import './observatory.css';
 
@@ -41,6 +42,7 @@ export default async function Observatory(){
         <p className="obs-note">Changes apply to new rounds. Existing session treatment assignments remain unchanged. Audit entries below are the latest 20 approved transitions.</p>
         <div className="obs-table-wrap"><table><thead><tr><th>Revision</th><th>Recorded</th><th>Previous</th><th>New mode</th><th>Reason</th></tr></thead><tbody>{audit.map(row=><tr key={String(row.revision)}><td>{String(row.revision)}</td><td>{formatTime(row.changed_at)}</td><td>{String(row.previous_mode)}</td><td>{String(row.new_mode)}</td><td>{String(row.reason)}</td></tr>)}</tbody></table></div>
       </section>
+      <Operations/>
       <Evaluation/>
       <Analysis/>
       <section><h2>TACTIC FAMILIES</h2><div className="obs-table-wrap"><table><thead><tr><th>Family</th><th>Version</th><th>Exposures</th><th>Sessions</th></tr></thead><tbody>{arms.map(x=><tr key={String(x.strategy_family)+'-'+String(x.strategy_version)}><td>{String(x.strategy_family)}</td><td>{String(x.strategy_version)}</td><td>{String(x.exposures)}</td><td>{String(x.sessions)}</td></tr>)}</tbody></table></div></section>
