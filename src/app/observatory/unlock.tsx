@@ -8,7 +8,7 @@ export default function Unlock(){
     e.preventDefault();setBusy(true);setError('');
     try{
       const res=await fetch('/observatory/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
-      if(!res.ok){setError(res.status===401?'Invalid credential or observatory not configured.':'Unable to unlock.');return;}
+      if(!res.ok){setError(res.status===429?'Too many attempts. Try again in 15 minutes.':res.status===401?'Invalid password.':res.status===503?'Authentication temporarily unavailable.':'Unable to unlock.');return;}
       setToken('');window.location.reload();
     }catch{setError('Connection unavailable');}finally{setBusy(false);}
   }
