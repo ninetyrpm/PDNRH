@@ -20,6 +20,7 @@ export default function Home() {
   const [previousReload,setPreviousReload] = useState(false);
   const [mutation,setMutation] = useState<PageMutation>(BASE_MUTATION);
   const [source,setSource] = useState<'waiting'|'model'|'fallback'>('waiting');
+  const [fallbackReason,setFallbackReason] = useState<string|null>(null);
   const [assignment,setAssignment] = useState<string>('pending');
   const exposureOrdinalRef = useRef(0);
   const [telemetryStatus,setTelemetryStatus] = useState<'pending'|'connected'|'offline'>('pending');
@@ -122,9 +123,10 @@ export default function Home() {
           strategiesRef.current.push(proposed.strategy);
           if(strategiesRef.current.length>10)strategiesRef.current.shift();
           setSource(data.source==='model'?'model':'fallback');
+          setFallbackReason(data.source==='fallback' && typeof data.fallbackReason==='string' ? data.fallbackReason : null);
           nextAtRef.current=remoteRef.current?.assignment==='baseline_control'?null:session.snapshot().elapsedMs+proposed.nextDelaySeconds*1000;
         }else nextAtRef.current=session.snapshot().elapsedMs+30000;
-      }catch{nextAtRef.current=session.snapshot().elapsedMs+30000;setSource('fallback');}
+      }catch{nextAtRef.current=session.snapshot().elapsedMs+30000;setSource('fallback');setFallbackReason('network_error');}
       finally{busyRef.current=false;}
     }
     const interval=window.setInterval(tick,250);
@@ -195,7 +197,7 @@ export default function Home() {
       <p className="muted">{snapshot.phase==='lost'?'Final survival time':upcoming?`Next milestone: ${formatElapsed(upcoming.target*1000)} · ${milestoneCount} reached`:'Every milestone reached. Still here.'}</p>
     </section>
     <footer className="footer">
-      <p className="muted">{playing?`Assignment ${assignment} · ${source==='model'?'AI-generated':source==='fallback'?'scripted fallback':'first change pending'} · telemetry ${telemetryStatus} · focus loss ends the round.`:'Focus loss ends a round. Session outcomes are recorded anonymously when telemetry is available.'}</p>
+      <p className="muted">{playing?`Assignment ${assignment} · ${source==='model'?'AI-generated':source==='fallback'?`scripted fallback (${fallbackReason??'unknown'})`:'first change pending'} · telemetry ${telemetryStatus} · focus loss ends the round.`:'Focus loss ends a round. Session outcomes are recorded anonymously when telemetry is available.'}</p>
       {playing&&<button type="button" onClick={concede}>{mutation.actionLabel}</button>}
     </footer>
   </main>;
