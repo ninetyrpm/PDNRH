@@ -1,11 +1,28 @@
 # PLEASE DO NOT REMAIN HERE
 
-PD04C: server-enforced experiment cohorts and exposure logging.
+A visitor tries to stay focused; an adversarial webpage tries to persuade them to leave.
 
-At BEGIN, Neon assigns a randomized cohort: adaptive (80%), static control (10%), baseline control (10%). The first five seconds display the baseline for all cohorts. Adaptive visitors receive model tactics (or scripted fallbacks if unavailable). Static controls receive the deterministic rotating fallback tactics, with no LLM calls. Baseline controls remain on the initial unchanged page.
+## PD04D — Integrity and reconciliation
 
-The mutation API authenticates the session and looks up assignment server-side. The browser reports displayed mutations, with ordinal 0 representing the baseline. Neon records exact mutation JSON, source, ordinal and server receipt time in `exposures`. On recording a subsequent exposure, the previous one is closed. The first/loss update and exposure requests may race; some events may be missed, especially during navigation. Exposure receipt timestamps approximate display timestamps; they are not independently confirmed by the server. PD04D will address out-of-order writes and terminal closure, plus integrity and diagnostics.
+- Baseline exposure is inserted by the server immediately after the session is created, not via an unreliable client-side race.
+- Mutation exposures are authenticated, validated, idempotent by session/ordinal, and their windows are rederived from ordinal ordering.
+- A terminal loss closes open exposures. Timing is server-observed, not guaranteed browser render time.
+- `db/maintenance/diagnostics.sql` provides read-only operational diagnostics.
+- `db/maintenance/reconcile.sql` is a **manual, repeatable** maintenance routine to close historical exposures and classify stale active sessions as **uncertain** after 3 minutes without a heartbeat. Periodic scheduling is not implemented.
+- Missing historical baseline exposures are not fabricated. Outcomes are client reports; lost telemetry cannot prove voluntary departure.
 
-No SQL migration required: PD04A already created the exposures table.
+The PD04A schema has already been applied to Neon. PD04D adds no new schema or Vercel secrets.
 
-Existing PD04B session lifecycle, focus-loss game rules and heartbeat telemetry remain in place. No cross-session learning yet.
+## Development
+
+```bash
+npm install
+npm test
+npm run typecheck
+npm run lint
+npm run build
+```
+
+## Roadmap
+
+PD05: randomized experimental evaluation, stable tactic identities, and evidence-based learning.

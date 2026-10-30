@@ -45,6 +45,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         loss_reason=${reason as string},elapsed_ms=${elapsed}
         WHERE id=${id} AND status='active' RETURNING id`;
       if (updated.length) {
+        // Close all open exposures at the server-observed terminal time.
+        await sql`UPDATE exposures SET ended_at=now()
+          WHERE session_id=${id} AND ended_at IS NULL`;
         await sql`INSERT INTO outcomes(session_id,classification,observed_reason,evidence)
           VALUES(${id},'confirmed_loss',${reason as string},${JSON.stringify({ elapsedMs:elapsed,clicks,scrolls,idleMs:idle })}::jsonb)
           ON CONFLICT(session_id) DO NOTHING`;
