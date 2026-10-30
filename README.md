@@ -1,27 +1,11 @@
 # PLEASE DO NOT REMAIN HERE
 
-A human tries to stay focused; an adaptive page tries to persuade them to leave.
+PD04C: server-enforced experiment cohorts and exposure logging.
 
-## PD04B — Session lifecycle telemetry
+At BEGIN, Neon assigns a randomized cohort: adaptive (80%), static control (10%), baseline control (10%). The first five seconds display the baseline for all cohorts. Adaptive visitors receive model tactics (or scripted fallbacks if unavailable). Static controls receive the deterministic rotating fallback tactics, with no LLM calls. Baseline controls remain on the initial unchanged page.
 
-The existing Vercel Neon integration provides `DATABASE_URL`. Apply `db/migrations/0001_initial.sql` before deploying (already applied to the production Neon database).
+The mutation API authenticates the session and looks up assignment server-side. The browser reports displayed mutations, with ordinal 0 representing the baseline. Neon records exact mutation JSON, source, ordinal and server receipt time in `exposures`. On recording a subsequent exposure, the previous one is closed. The first/loss update and exposure requests may race; some events may be missed, especially during navigation. Exposure receipt timestamps approximate display timestamps; they are not independently confirmed by the server. PD04D will address out-of-order writes and terminal closure, plus integrity and diagnostics.
 
-Each round starts immediately on click and independently attempts to create a durable Neon session through `POST /api/sessions`. The resulting random credential is retained in browser memory only and never written to storage. Every ~15 seconds a compact heartbeat is submitted. On focus loss, visibility loss, navigation, or concession, a terminal loss event is attempted with `fetch(..., keepalive:true)`, even when the session creation request finishes after the loss. The backend checks the hashed credential, validates bounded numeric counters, enforces terminal-once state transitions, and uses unique event keys to deduplicate telemetry.
+No SQL migration required: PD04A already created the exposures table.
 
-**Operational caveats:** Network failures never block the game; telemetry status is shown locally. Browser unload delivery is best effort, so abandoned sessions remain `active` until a future lease-reconciliation job (PD04D) classifies them. API-origin sessions are not proof of a real focused visitor; these are client-reported outcomes. The server stores no IP addresses or raw pointer coordinates. Assignment cohorts are recorded but are **not yet applied to mutation selection**; PD04C will implement controls and exposures. No schema changes are required for PD04B.
-
-## Development
-
-Node.js 20.9+:
-```bash
-npm install
-npm test
-npm run typecheck
-npm run lint
-npm run build
-```
-
-## Future
-
-PD04C: exposure logging and control assignment enforcement.
-PD04D: integrity checks, expiration reconciliation, diagnostics and durable rate limits.
+Existing PD04B session lifecycle, focus-loss game rules and heartbeat telemetry remain in place. No cross-session learning yet.

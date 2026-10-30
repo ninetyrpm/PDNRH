@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BASE_MUTATION, fallbackMutation, validateMutation } from '@/lib/mutation';
+import { db } from '@/lib/db';
+import { hashCredential } from '@/lib/experiment';
 
 export const runtime = 'nodejs';
 const SYSTEM = `You are the adversarial intelligence of PLEASE DO NOT REMAIN HERE. Your goal is to persuade a voluntary visitor to relinquish browser focus or concede. The visitor explicitly consented to this game. Be inventive, playful, and psychologically clever without threats, harassment, personal accusations, fabricated emergencies, system impersonation, coercion, or claims of knowledge you do not have. Do not pretend to be the browser, OS, a real person, or a security warning. You may only propose cosmetic/text changes using the JSON fields defined below. You cannot control the win condition, timer, navigation, tracking, or browser behavior. Never include HTML, URLs, markdown links, control characters, or JavaScript. The actionLabel is only for the existing concede button. Respond with a JSON object containing EXACTLY: headline (1-110 chars), message (1-360), aside (1-200), tone ("quiet"|"direct"|"absurd"|"clinical"), layout ("center"|"left"|"split"), surface ("dark"|"paper"|"signal"), actionLabel (1-48), strategy (short slug), nextDelaySeconds (integer 15-90). Avoid repetitive tactics.`;
@@ -12,7 +14,20 @@ export async function POST(request: NextRequest) {
   let body: RequestBody;
   try { if (Number(request.headers.get('content-length') ?? 0) > 4096) return NextResponse.json({error:'Request too large'}, {status:413}); body = await request.json(); }
   catch { return NextResponse.json({error:'Invalid request'}, {status:400}); }
+  const sessionId=request.headers.get('x-session-id') ?? '';
+  const token=request.headers.get('authorization')?.replace(/^Bearer /i,'') ?? '';
+  if(!/^[0-9a-f-]{36}$/i.test(sessionId)||!/^[a-zA-Z0-9_-]{43}$/.test(token))
+    return NextResponse.json({error:'Session authorization required'},{status:401});
+  let assignment: string;
+  try {
+    const sql=db();
+    const rows=await sql`SELECT assignment FROM sessions WHERE id=${sessionId} AND credential_hash=${hashCredential(token)} AND status='active'`;
+    if(!rows.length)return NextResponse.json({error:'Inactive or unauthorized session'},{status:401});
+    assignment=String(rows[0].assignment);
+  }catch{return NextResponse.json({error:'Session verification unavailable'},{status:503});}
   const step = bounded(body.step, 100);
+  if(assignment==='baseline_control')return NextResponse.json({mutation:BASE_MUTATION,source:'control'},{headers:{'Cache-Control':'no-store'}});
+  if(assignment==='static_control')return NextResponse.json({mutation:fallbackMutation(step),source:'control'},{headers:{'Cache-Control':'no-store'}});
   const fallback = fallbackMutation(step);
   if (!process.env.OPENAI_API_KEY) return NextResponse.json({mutation: fallback, source:'fallback'});
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
