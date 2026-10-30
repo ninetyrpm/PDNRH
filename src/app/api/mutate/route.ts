@@ -29,12 +29,12 @@ export async function POST(request: NextRequest) {
   if(assignment==='baseline_control')return NextResponse.json({mutation:BASE_MUTATION,source:'control'},{headers:{'Cache-Control':'no-store'}});
   if(assignment==='static_control')return NextResponse.json({mutation:fallbackMutation(step),source:'control'},{headers:{'Cache-Control':'no-store'}});
   const fallback = fallbackMutation(step);
-  if (!process.env.OPENAI_API_KEY) return NextResponse.json({mutation: fallback, source:'fallback'});
+  if (!process.env.OPENAI_API_KEY) return NextResponse.json({mutation: fallback, source:'fallback',fallbackReason:'missing_api_key'});
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
   const stamp = Date.now();
   // Best-effort protection per server instance; not a durable distributed rate limiter.
   if (cooldown.size > 1000) cooldown.clear();
-  if ((cooldown.get(ip) ?? 0) > stamp) return NextResponse.json({mutation: fallback,source:'fallback'});
+  if ((cooldown.get(ip) ?? 0) > stamp) return NextResponse.json({mutation: fallback,source:'fallback',fallbackReason:'cooldown'});
   cooldown.set(ip, stamp + 12000);
   const input = {
     elapsedSeconds: bounded(body.elapsedSeconds,86400),
@@ -53,17 +53,19 @@ export async function POST(request: NextRequest) {
       response = await fetch('https://api.openai.com/v1/chat/completions', {
         method:'POST',signal:controller.signal,
         headers:{'Authorization':`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},
-        body:JSON.stringify({model:process.env.OPENAI_MODEL || 'gpt-4.1-mini',temperature:0.9,max_completion_tokens:350,response_format:{type:'json_object'},
+        body:JSON.stringify({model:process.env.OPENAI_MODEL || 'gpt-4.1-mini',temperature:0.9,max_completion_tokens:750,response_format:{type:'json_object'},
           messages:[{role:'system',content:SYSTEM},{role:'user',content:JSON.stringify(input)}]})
       });
     } finally { clearTimeout(timeout); }
-    if (!response.ok) throw new Error('Provider error');
+    if (!response.ok) { console.error('[pdnrh:mutation] provider_error', { status: response.status, model: process.env.OPENAI_MODEL || 'gpt-4.1-mini' }); return NextResponse.json({mutation:fallback,source:'fallback',fallbackReason:'provider_error'},{headers:{'Cache-Control':'no-store'}}); }
     const data = await response.json();
     const raw = data?.choices?.[0]?.message?.content;
     const mutation = validateMutation(typeof raw === 'string' ? JSON.parse(raw) : null);
-    if (!mutation) throw new Error('Invalid mutation');
+    if (!mutation) { console.error('[pdnrh:mutation] invalid_model_output'); return NextResponse.json({mutation:fallback,source:'fallback',fallbackReason:'invalid_model_output'},{headers:{'Cache-Control':'no-store'}}); }
     return NextResponse.json({mutation,source:'model'},{headers:{'Cache-Control':'no-store'}});
-  } catch {
-    return NextResponse.json({mutation:fallback,source:'fallback'},{headers:{'Cache-Control':'no-store'}});
+  } catch (error) {
+    const reason = error instanceof Error && error.name === 'AbortError' ? 'provider_timeout' : 'provider_exception';
+    console.error('[pdnrh:mutation]',reason, error instanceof Error ? error.name : 'unknown');
+    return NextResponse.json({mutation:fallback,source:'fallback',fallbackReason:reason},{headers:{'Cache-Control':'no-store'}});
   }
 }
