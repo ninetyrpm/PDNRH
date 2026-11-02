@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
 
-const ARM_NAMES=['baseline_control','static_control','closure_frame','curiosity_reversal','absurdist_deflation'];
+const ARM_NAMES=['baseline_control','static_control','closure_frame','curiosity_reversal','absurdist_deflation','legacy_adaptive'];
 const TARGET=30;
 function numeric(v:unknown){return Number(v??0);}
 function fmt(n:number){return n.toLocaleString('en-US');}
@@ -13,7 +13,7 @@ export default async function Operations(){
        count(*) FILTER(WHERE status='uncertain')::int AS uncertain
        FROM sessions WHERE started_at>=now()-interval '14 days'
        GROUP BY 1 ORDER BY 1 DESC`,
-   sql`SELECT CASE WHEN assignment='adaptive' AND tactic_family IS NOT NULL THEN tactic_family ELSE assignment END AS arm,
+   sql`SELECT CASE WHEN assignment='adaptive' THEN COALESCE(tactic_family,'legacy_adaptive') ELSE assignment END AS arm,
      count(*)::int AS total,
      count(*) FILTER(WHERE status='confirmed_loss' AND elapsed_ms IS NOT NULL)::int AS completed,
      count(*) FILTER(WHERE status='uncertain')::int AS uncertain,
@@ -43,11 +43,11 @@ export default async function Operations(){
    <p className="obs-note">Read-only operating pulse. Daily counts use UTC calendar dates and include every recorded session, including legacy rounds. Collection thresholds reflect the PD05C selector gate, not statistical power.</p>
    <div className="obs-operations-grid">
      <div><h3>COLLECTION / CONFIRMED LOSSES</h3>{data.map(a=><div className="obs-progress" key={a.name}>
-       <div><span>{a.name}</span><strong>{fmt(a.completed)} / {TARGET}</strong></div>
-       <div className="obs-progress-track"><div style={{width:Math.min(100,a.completed/TARGET*100)+'%'}}/></div>
+       <div><span>{a.name}</span><strong>{a.name==='legacy_adaptive'?fmt(a.completed)+' historical':fmt(a.completed)+' / '+TARGET}</strong></div>
+       <div className="obs-progress-track"><div style={{width:(a.name==='legacy_adaptive'?0:Math.min(100,a.completed/TARGET*100))+'%'}}/></div>
        <small>{fmt(a.total)} rounds · {fmt(a.uncertain)} uncertain · {fmt(a.active)} active</small>
      </div>)}
-     <p className="obs-note">Static control is displayed for monitoring but is not part of the current selector threshold. Pre-PD05C baseline and tactic records may not form a comparable randomized cohort.</p></div>
+     <p className="obs-note">Static control is displayed for monitoring but is not part of the current selector threshold. Legacy adaptive sessions are shown separately and do not contribute to assigned-family evidence thresholds. Historical baseline-control sessions are included in operational totals but may not be comparable to current cohorts.</p></div>
      <div><h3>COLLECTION / LAST 14 DAYS</h3>{daily.length?daily.map(day=><div key={String(day.day)} className="obs-day">
        <span>{String(day.day)}</span><div className="obs-day-track"><div style={{width:(numeric(day.sessions)/max*100)+'%'}}/></div>
        <strong>{String(day.sessions)}</strong><small>{String(day.confirmed)} confirmed · {String(day.uncertain)} uncertain</small>
