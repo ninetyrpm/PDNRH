@@ -21,3 +21,25 @@
 .pd-effect-blink{animation:pd-blink 1.6s ease-in-out infinite}.pd-effect-float{animation:pd-float 3s ease-in-out infinite}.pd-effect-pulse{animation:pd-pulse 2.1s ease-in-out infinite}
 @media(max-width:650px){.pd-scene-grid,.pd-scene-scatter{grid-template-columns:1fr}.pd-scene-scatter .pd-block:nth-child(n){grid-column:auto;transform:none}}
 @media(prefers-reduced-motion:reduce){.pd-effect-blink,.pd-effect-float,.pd-effect-pulse{animation:none}}
+
+/* PD11E: compositional change, not only text treatments. All effects are local. */
+.pd-scene-poster{width:100%;max-width:none;min-height:62vh;align-content:center;justify-items:center;text-align:center;gap:clamp(14px,3vh,46px);padding:clamp(24px,5vw,70px);border:1px solid var(--pd-accent)}
+.pd-scene-poster .pd-kind-heading{font-size:clamp(48px,8vw,132px);letter-spacing:-.085em;line-height:.85;max-width:1000px}
+.pd-scene-poster .pd-kind-panel{width:min(600px,100%)}
+.pd-scene-terminal{width:100%;max-width:none;min-height:60vh;align-content:start;grid-template-columns:minmax(0,1fr);border-left:5px solid var(--pd-accent);padding:clamp(24px,5vw,70px);background:rgba(127,127,127,.06);font-family:monospace}
+.pd-scene-terminal .pd-kind-heading,.pd-scene-terminal .pd-kind-paragraph{font-family:monospace;letter-spacing:-.055em}
+.pd-scene-terminal .pd-kind-heading{font-size:clamp(31px,5vw,75px)}
+.pd-scene-mosaic{max-width:none;min-height:62vh;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-flow:dense;gap:clamp(8px,1.2vw,18px)}
+.pd-scene-mosaic .pd-block{padding:clamp(8px,1vw,20px);min-height:90px;border:1px solid color-mix(in srgb,var(--pd-accent) 45%,transparent)}
+.pd-scene-mosaic .pd-block:nth-child(5n+1){grid-column:span 2;grid-row:span 2;align-content:center}
+.pd-scene-mosaic .pd-block:nth-child(4n+2){grid-column:span 2}
+.pd-kind-void{display:flex;align-items:center;justify-content:center;min-height:160px}
+.pd-void{width:clamp(115px,17vw,260px);aspect-ratio:1;border:clamp(7px,1.3vw,19px) solid var(--pd-accent);border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 22px color-mix(in srgb,var(--pd-accent) 12%,transparent),inset 0 0 55px color-mix(in srgb,var(--pd-accent) 10%,transparent);font:700 clamp(28px,5vw,72px) monospace;letter-spacing:-.09em}
+.pd-meter{display:grid;gap:14px;width:min(550px,100%);font-family:monospace;text-transform:uppercase;letter-spacing:.16em;font-size:12px}
+.pd-meter-track{height:clamp(15px,2vw,28px);border:1px solid var(--pd-accent);padding:4px}
+.pd-meter-track>div{height:100%;width:64%;background:repeating-linear-gradient(90deg,var(--pd-accent) 0,var(--pd-accent) 12px,transparent 12px,transparent 17px)}
+.pd-marquee{overflow:hidden;white-space:nowrap;border-block:1px solid var(--pd-accent);padding:16px 0;letter-spacing:.12em;font-family:monospace;text-transform:uppercase}
+.pd-marquee span{display:inline-block;animation:pd-marquee 14s linear infinite}
+@keyframes pd-marquee{50%{translate:-15% 0}100%{translate:0 0}}
+@media(max-width:700px){.pd-scene-mosaic{grid-template-columns:repeat(2,minmax(0,1fr))}.pd-scene-mosaic .pd-block:nth-child(n){grid-column:auto;grid-row:auto}.pd-scene-mosaic .pd-block:nth-child(5n+1){grid-column:span 2}.pd-scene-poster{min-height:45vh;padding:20px}}
+@media(prefers-reduced-motion:reduce){.pd-marquee span{animation:none}}

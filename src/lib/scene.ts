@@ -1,18 +1,18 @@
 /** The model authors a declarative scene, never executable browser code.
  * Only the protected game controller may finish a round.
  */
-export type SceneKind='heading'|'paragraph'|'label'|'rule'|'button'|'panel'|'glyph';
+export type SceneKind='heading'|'paragraph'|'label'|'rule'|'button'|'panel'|'glyph'|'meter'|'marquee'|'void';
 export type SceneAction='none'|'concede'|'reveal'|'toggle';
 export type SceneBlock={
   id:string;kind:SceneKind;text:string;detail:string;align:'left'|'center'|'right';
   size:'sm'|'md'|'lg'|'xl';effect:'none'|'blink'|'float'|'pulse';action:SceneAction;
 };
 export type PageScene={
-  version:1;composition:'column'|'grid'|'scatter';
+  version:1;composition:'column'|'grid'|'scatter'|'poster'|'terminal'|'mosaic';
   accent:'neutral'|'ember'|'lime'|'ice';blocks:SceneBlock[];
 };
 const allowed={
-  kind:['heading','paragraph','label','rule','button','panel','glyph'],
+  kind:['heading','paragraph','label','rule','button','panel','glyph','meter','marquee','void'],
   align:['left','center','right'],size:['sm','md','lg','xl'],
   effect:['none','blink','float','pulse'],action:['none','concede','reveal','toggle']
 } as const;
@@ -22,7 +22,7 @@ function safeText(v:unknown,max:number){
 export function validateScene(value:unknown):PageScene|null{
   if(!value||typeof value!=='object'||Array.isArray(value))return null;
   const scene=value as Record<string,unknown>;
-  if(scene.version!==1||!['column','grid','scatter'].includes(String(scene.composition))||
+  if(scene.version!==1||!['column','grid','scatter','poster','terminal','mosaic'].includes(String(scene.composition))||
     !['neutral','ember','lime','ice'].includes(String(scene.accent))||
     !Array.isArray(scene.blocks)||scene.blocks.length<1||scene.blocks.length>12)return null;
   const blocks:SceneBlock[]=[];const ids=new Set<string>();
@@ -45,4 +45,14 @@ export function validateScene(value:unknown):PageScene|null{
   }
   return {version:1,composition:scene.composition as PageScene['composition'],
     accent:scene.accent as PageScene['accent'],blocks};
+}
+
+/** PD11E: every model-authored adaptive output must transform the structure.
+ * A scene needs an interactive local affordance and a non-textual visual object.
+ * Legacy/static controls continue accepting text-only mutations.
+ */
+export function isCreativeScene(scene:PageScene|undefined):scene is PageScene{
+  return !!scene && scene.blocks.length>=3 &&
+    scene.blocks.some(b=>b.kind==='button'&&(b.action==='reveal'||b.action==='toggle')) &&
+    scene.blocks.some(b=>['glyph','meter','void','rule'].includes(b.kind));
 }
