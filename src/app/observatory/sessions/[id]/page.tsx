@@ -19,7 +19,7 @@ export default async function SessionInspector({params}:{params:Promise<{id:stri
   if(!uuid.test(id))notFound();
   const sql=db();
   const [sessions,exposures,events,outcomes]=await Promise.all([
-    sql`SELECT id::text,assignment,tactic_family,tactic_policy,engine_version,status,loss_reason,elapsed_ms,started_at,ended_at,last_seen_at FROM sessions WHERE id=${id}`,
+    sql`SELECT id::text,assignment,tactic_family,tactic_policy,engine_version,status,loss_reason,exit_channel,elapsed_ms,started_at,ended_at,last_seen_at FROM sessions WHERE id=${id}`,
     sql`SELECT e.ordinal,e.source,e.displayed_at,e.ended_at,e.mutation,t.strategy_family,t.strategy_version
       FROM exposures e LEFT JOIN tactics t ON t.id=e.tactic_id
       WHERE e.session_id=${id} ORDER BY e.ordinal LIMIT 1000`,
@@ -32,7 +32,7 @@ export default async function SessionInspector({params}:{params:Promise<{id:stri
     <p className="obs-kicker">EXP 001 / READ ONLY</p><h1>SESSION.</h1><p className="obs-session-id">{id}</p>
     <div className="obs-detail-summary">
       <div><span>ASSIGNMENT</span><strong>{text(s.assignment)}</strong></div><div><span>ENGINE / TACTIC / POLICY</span><strong>{text(s.engine_version)} / {text(s.tactic_family)} / {text(s.tactic_policy)}</strong></div>
-      <div><span>STATUS</span><strong>{text(s.status)} / {text(s.loss_reason)}</strong></div><div><span>SURVIVAL</span><strong>{secs(s.elapsed_ms)}</strong></div>
+      <div><span>STATUS</span><strong>{text(s.status)} / {text(s.loss_reason)}{s.exit_channel?' / '+String(s.exit_channel):''}</strong></div><div><span>SURVIVAL</span><strong>{secs(s.elapsed_ms)}</strong></div>
       <div><span>STARTED</span><strong>{stamp(s.started_at)}</strong></div><div><span>ENDED</span><strong>{stamp(s.ended_at)}</strong></div>
     </div>
     <section><h2>VISUAL SESSION REPLAY</h2><Replay startedAt={new Date(String(s.started_at)).getTime()} endedAt={s.ended_at?new Date(String(s.ended_at)).getTime():null} frames={exposures.flatMap(e=>{const mutation=validateMutation(e.mutation);return mutation?[{ordinal:Number(e.ordinal),source:String(e.source),start:new Date(String(e.displayed_at)).getTime(),end:e.ended_at?new Date(String(e.ended_at)).getTime():null,mutation}]:[];})}/></section>
