@@ -1,5 +1,5 @@
 /** Client-only game state. The machine wins on the first focus/visibility loss after entry. */
-export type LossReason = 'blur' | 'hidden' | 'pagehide' | 'concede' | 'reload';
+export type LossReason = 'blur' | 'hidden' | 'pagehide' | 'concede' | 'reload' | 'external_link';
 export type SessionEvent = 'click' | 'scroll' | 'activity';
 export type Phase = 'ready' | 'playing' | 'lost';
 export interface SessionSnapshot {
