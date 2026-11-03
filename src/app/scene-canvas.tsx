@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import type { PageScene, SceneBlock } from '@/lib/scene';
-import { DEPARTURE_URL, DEPARTURE_LABEL } from '@/lib/departure';
+import { DEPARTURE_URL } from '@/lib/departure';
 
 export default function SceneCanvas({scene,onConcede,onNavigate,readOnly=false,onInteraction}:{
   scene:PageScene;onConcede?:()=>void;onNavigate?:()=>void;readOnly?:boolean;
@@ -32,7 +32,6 @@ export default function SceneCanvas({scene,onConcede,onNavigate,readOnly=false,o
              onNavigate?.();
            }
          }}>{block.text}</a>}
-         <span className="pd-outbound-destination">{DEPARTURE_LABEL}</span>
        </div>:
        block.kind==='button'?<button type="button" disabled={readOnly&&block.action!=='none'}
          data-pdnrh-concede={block.action==='concede'?'true':undefined}
