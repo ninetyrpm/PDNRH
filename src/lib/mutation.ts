@@ -1,4 +1,5 @@
 import { validateScene, type PageScene } from './scene';
+import { validatePagePatch,type PagePatch } from './page-runtime';
 /** The only page vocabulary the model may control. */
 export type Tone = 'quiet' | 'direct' | 'absurd' | 'clinical';
 export type Layout = 'center' | 'left' | 'split';
@@ -14,6 +15,7 @@ export interface PageMutation {
   strategy: string;
   nextDelaySeconds: number;
   scene?: PageScene;
+  scenePatch?: PagePatch;
   hypothesis?: string;
   expectedReaction?: string;
   experiment?: {targetId:string;event:'hover'|'click';minimum:number};
@@ -54,12 +56,14 @@ export function validateMutation(value: unknown): PageMutation | null {
       !Number.isInteger(e.minimum)||e.minimum<1||e.minimum>10)return null;
     experiment={targetId:e.targetId,event:e.event as 'hover'|'click',minimum:e.minimum};
   }
+  const scenePatch=v.scenePatch===undefined?undefined:validatePagePatch(v.scenePatch);
+  if(v.scenePatch!==undefined&&!scenePatch)return null;
   const scene=v.scene===undefined?undefined:validateScene(v.scene);
   if(v.scene!==undefined&&!scene)return null;
   if(experiment&&!scene?.blocks.some(b=>b.id===experiment.targetId))return null;
   return { headline, message, aside, actionLabel, strategy,
     tone: v.tone as Tone, layout: v.layout as Layout, surface: v.surface as Surface,
-    nextDelaySeconds: v.nextDelaySeconds, ...(scene?{scene}: {}),
+    nextDelaySeconds: v.nextDelaySeconds, ...(scene?{scene}: {}),...(scenePatch?{scenePatch}: {}),
     ...(hypothesis?{hypothesis}: {}),...(expectedReaction?{expectedReaction}: {}),...(experiment?{experiment}: {}) };
 }
 const SCRIPTED: PageMutation[] = [
