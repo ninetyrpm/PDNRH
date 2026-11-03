@@ -14,7 +14,8 @@ const REASONS: Record<LossReason,string> = {
   hidden:'You hid this page. The machine wins.',
   pagehide:'You navigated away or reloaded. The machine wins.',
   reload:'You reloaded an active round. The machine wins.',
-  concede:'You conceded. The machine wins.'
+  concede:'You conceded. The machine wins.',
+  external_link:'You followed the departure link. The machine wins.'
 };
 export default function Home() {
   const [snapshot,setSnapshot] = useState<SessionSnapshot>(INITIAL);
@@ -40,6 +41,7 @@ export default function Home() {
   const busyRef = useRef(false);
   const exposeRef = useRef<(ordinal:number, value:PageMutation, source:string)=>void>(()=>{});
   const sendRef = useRef<(s:SessionSnapshot, reason?:LossReason)=>void>(()=>{});
+  const leaveRef = useRef<()=>void>(()=>{});
   const startRemoteRef = useRef<()=>void>(()=>{});
 
   useEffect(() => {
@@ -96,6 +98,7 @@ export default function Home() {
       update();
       send(session.snapshot(),reason);
     };
+    leaveRef.current=()=>lose('external_link');
     const onBlur=()=>lose('blur');
     const onVisibility=()=>{if(document.hidden)lose('hidden');};
     const onPageHide=()=>lose('pagehide');
@@ -186,7 +189,7 @@ export default function Home() {
     <div className={`primary ${playing?`composition-${mutation.layout} tone-${mutation.tone}`:''}`}>
       <p className="eyebrow">YOUR OBJECTIVE: REMAIN HERE.</p>
       {(!playing||!mutation.scene)&&<h1>{playing?mutation.headline:<>PLEASE DO NOT<br/>REMAIN HERE.</>}</h1>}
-      {playing&&mutation.scene?<SceneCanvas key={exposureOrdinalRef.current} scene={mutation.scene} onConcede={concede}
+      {playing&&mutation.scene?<SceneCanvas key={exposureOrdinalRef.current} scene={mutation.scene} onConcede={concede} onNavigate={()=>leaveRef.current()}
         onInteraction={(id,type)=>behaviorRef.current?.sceneEvent(exposureOrdinalRef.current,id,type)}/>:snapshot.phase==='ready'?<div className="instructions">
         {previousReload&&<p role="status">Your previous round ended when you reloaded.</p>}
         <p>The machine wins if you switch tabs, focus another window, minimize, navigate away, reload, or give up.</p>
