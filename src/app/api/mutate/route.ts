@@ -3,7 +3,7 @@ import { BASE_MUTATION, fallbackMutation, validateMutation } from '@/lib/mutatio
 import { db } from '@/lib/db';
 import { hashCredential } from '@/lib/experiment';
 import { TACTIC_LIBRARY } from '@/lib/tactics';
-import { creativeFallback,validateCreativeMutation } from '@/lib/creative-engine';
+import { creativeFallback,validateCreativeMutation,isStructurallyNovel } from '@/lib/creative-engine';
 import { recentStrategyMemory, behavioralContext } from '@/lib/adversary-context';
 
 export const runtime = 'nodejs';
@@ -60,7 +60,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({mutation:fallback,source:'fallback',fallbackReason:'context_unavailable'},
       {headers:{'Cache-Control':'no-store'}});
   }
-  const creativeInstruction=creative?`PD11E / STRUCTURAL AGENCY. Every response MUST include scene (version 1) with at least THREE blocks, a functional button action reveal or toggle with nonempty detail, and a visual glyph, void, meter, or rule. The page MUST look substantially different from the previous exposure: replace its structure, not merely its wording. The treatment family controls the persuasive idea, NOT typography or artistic style. Even closure_frame may use dramatic deletion, voids, progress-shaped art, staggered panels, an empty terminal, or a scattered constellation. Alternate composition poster, mosaic, terminal, grid, scatter; avoid repeating the previous composition. Available scene kinds: heading, paragraph, label, rule, button, panel, glyph, meter, marquee, void. Available compositions: column, grid, scatter, poster, terminal, mosaic. All blocks require unique id, kind, text, detail (may be empty), align (left/center/right), size (sm/md/lg/xl), effect (none/blink/float/pulse), action (none/reveal/toggle/concede). Only buttons may have an action other than none. Use interactions to run a test: choose a concrete component ID and predict whether the visitor will hover or click it. Interpret previous component click/hover counts as on-page observations, not personal knowledge. Include short factual hypothesis and expectedReaction fields. Keep entire experiment rules, navigation and focus behavior untouched. Emit exactly one JSON object containing headline, message, aside, tone, layout, surface, actionLabel, strategy, nextDelaySeconds, hypothesis, expectedReaction, scene.`:null;
+  const creativeInstruction=creative?`PD11E / STRUCTURAL AGENCY. Every response MUST include scene (version 1) with at least THREE blocks, a functional button action reveal or toggle with nonempty detail, and a visual glyph, void, meter, or rule. The page MUST look substantially different from the previous exposure: replace its structure, not merely its wording. The treatment family controls the persuasive idea, NOT typography or artistic style. Even closure_frame may use dramatic deletion, voids, progress-shaped art, staggered panels, an empty terminal, or a scattered constellation. Alternate composition poster, mosaic, terminal, grid, scatter; avoid repeating the previous composition. Available scene kinds: heading, paragraph, label, rule, button, panel, glyph, meter, marquee, void. Available compositions: column, grid, scatter, poster, terminal, mosaic. All blocks require unique id, kind, text, detail (may be empty), align (left/center/right), size (sm/md/lg/xl), effect (none/blink/float/pulse), action (none/reveal/toggle/concede). Only buttons may have an action other than none. Use interactions to run a test: choose a concrete component ID and predict whether the visitor will hover or click it. Interpret previous component click/hover counts as on-page observations, not personal knowledge. Include short factual hypothesis and expectedReaction fields. You MUST include experiment:{targetId,event,minimum}, where targetId is an ID of a block in YOUR new scene, event is hover or click, and minimum is an integer from 1 to 10. The purpose is to test whether this on-page stimulus receives actual attention. Keep entire experiment rules, navigation and focus behavior untouched. Emit exactly one JSON object containing headline, message, aside, tone, layout, surface, actionLabel, strategy, nextDelaySeconds, hypothesis, expectedReaction, scene.`:null;
+  const previousTest=memory.at(-1)?.experiment;
+  const observed=previousTest?behavior.current?.sceneInteractions?.find(
+    i=>i.exposure===memory.at(-1)?.ordinal&&i.id===previousTest.targetId
+  ):null;
+  const previousExperimentResult=previousTest?{
+    exposure:memory.at(-1)?.ordinal,
+    targetId:previousTest.targetId,event:previousTest.event,
+    expectedMinimum:previousTest.minimum,
+    observedCount:previousTest.event==='hover'?(observed?.hovers??0):(observed?.clicks??0),
+    met:(previousTest.event==='hover'?(observed?.hovers??0):(observed?.clicks??0))>=previousTest.minimum,
+    note:'Counts observed so far, not proof of intent; round may still be active'
+  }:null;
   const input = {
     elapsedSeconds: bounded(body.elapsedSeconds,86400),
     clicks: bounded(body.clicks,100000),
@@ -69,6 +81,7 @@ export async function POST(request: NextRequest) {
     step,
     observationSource:creative?'pd11e-component-events-v1':'pd11c-first-party-aggregates-v1',
     creativeInstruction,
+    previousExperimentResult,
     behavioralObservation:behavior,
     recordedStrategyHistory:memory,
     previousStrategies: memory.map(m=>m.strategy),
@@ -106,7 +119,7 @@ export async function POST(request: NextRequest) {
     const data = await response.json();
     const raw = data?.choices?.[0]?.message?.content;
     const mutation = validateMutation(typeof raw === 'string' ? JSON.parse(raw) : null);
-    if (!mutation || (creative&&!validateCreativeMutation(mutation))) { console.error('[pdnrh:mutation] invalid_model_output_or_missing_scene'); return NextResponse.json({mutation:fallback,source:'fallback',fallbackReason:'invalid_model_output'},{headers:{'Cache-Control':'no-store'}}); }
+    if (!mutation || (creative&&(!validateCreativeMutation(mutation)||!isStructurallyNovel(mutation,memory.at(-1))))) { console.error('[pdnrh:mutation] invalid_model_output_or_missing_scene'); return NextResponse.json({mutation:fallback,source:'fallback',fallbackReason:'invalid_model_output'},{headers:{'Cache-Control':'no-store'}}); }
     return NextResponse.json({mutation,source:'model'},{headers:{'Cache-Control':'no-store'}});
   } catch (error) {
     const reason = error instanceof Error && error.name === 'AbortError' ? 'provider_timeout' : 'provider_exception';
