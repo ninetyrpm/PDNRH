@@ -6,7 +6,7 @@ function numeric(v:unknown){return Number(v??0);}
 function fmt(n:number){return n.toLocaleString('en-US');}
 export default async function Operations(){
  const sql=db();
- const [daily,assigned,integrity,versions]=await Promise.all([
+ const [daily,assigned,integrity,versions,engines]=await Promise.all([
    sql`SELECT date_trunc('day',started_at AT TIME ZONE 'UTC')::date::text AS day,
        count(*)::int AS sessions,
        count(*) FILTER(WHERE status='confirmed_loss')::int AS confirmed,
@@ -27,7 +27,8 @@ export default async function Operations(){
      FROM sessions s`,
    sql`SELECT tactic_policy,count(*)::int AS sessions,
        min(started_at) AS first_seen,max(started_at) AS last_seen
-       FROM sessions GROUP BY tactic_policy ORDER BY last_seen DESC NULLS LAST`
+       FROM sessions GROUP BY tactic_policy ORDER BY last_seen DESC NULLS LAST`,
+   sql`SELECT engine_version,count(*)::int AS sessions,min(started_at) AS first_seen,max(started_at) AS last_seen FROM sessions GROUP BY engine_version ORDER BY last_seen DESC NULLS LAST`
  ]);
  const data=ARM_NAMES.map(name=>{const found=assigned.find(r=>String(r.arm)===name);return {name,total:numeric(found?.total),completed:numeric(found?.completed),uncertain:numeric(found?.uncertain),active:numeric(found?.active)};});
  const q=integrity[0]??{};
@@ -55,6 +56,11 @@ export default async function Operations(){
    </div>
    <h3>INTEGRITY / ATTENTION REQUIRED</h3>
    <div className="obs-quality">{blockers.map(b=><div key={b.name}><strong>{b.value}</strong><span>{b.name}</span><small>{b.meaning}</small></div>)}</div>
+   <h3>ADVERSARY ENGINE VERSIONS</h3>
+   <p className="obs-note">PD11C is a distinct treatment environment. Earlier rounds must not be combined with it when estimating behavioral effects.</p>
+   <div className="obs-table-wrap"><table><thead><tr><th>Engine version</th><th>Rounds</th><th>First observed</th><th>Last observed</th></tr></thead><tbody>
+     {engines.map(e=><tr key={String(e.engine_version)}><td>{String(e.engine_version)}</td><td>{String(e.sessions)}</td><td>{e.first_seen?new Date(String(e.first_seen)).toISOString().slice(0,16).replace('T',' ')+' UTC':'—'}</td><td>{e.last_seen?new Date(String(e.last_seen)).toISOString().slice(0,16).replace('T',' ')+' UTC':'—'}</td></tr>)}
+   </tbody></table></div>
    <h3>POLICY-VERSION INVENTORY</h3>
    <p className="obs-note">Each version is based on the policy label stored at session creation. Historical null labels are explicitly retained; governance revisions are embedded in newer adaptive policy labels.</p>
    <div className="obs-table-wrap"><table><thead><tr><th>Policy label</th><th>Rounds</th><th>First observed</th><th>Last observed</th></tr></thead><tbody>

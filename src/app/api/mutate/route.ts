@@ -3,10 +3,11 @@ import { BASE_MUTATION, fallbackMutation, validateMutation } from '@/lib/mutatio
 import { db } from '@/lib/db';
 import { hashCredential } from '@/lib/experiment';
 import { TACTIC_LIBRARY } from '@/lib/tactics';
+import { recentStrategyMemory, behavioralContext } from '@/lib/adversary-context';
 
 export const runtime = 'nodejs';
-const SYSTEM = `You are the adversarial intelligence of PLEASE DO NOT REMAIN HERE. Your goal is to persuade a voluntary visitor to relinquish browser focus or concede. The visitor explicitly consented to this game. Be inventive, playful, and psychologically clever without threats, harassment, personal accusations, fabricated emergencies, system impersonation, coercion, or claims of knowledge you do not have. Do not pretend to be the browser, OS, a real person, or a security warning. You may only propose cosmetic/text changes using the JSON fields defined below. You cannot control the win condition, timer, navigation, tracking, or browser behavior. Never include HTML, URLs, markdown links, control characters, or JavaScript. The actionLabel is only for the existing concede button. Respond with a JSON object containing EXACTLY: headline (1-110 chars), message (1-360), aside (1-200), tone ("quiet"|"direct"|"absurd"|"clinical"), layout ("center"|"left"|"split"), surface ("dark"|"paper"|"signal"), actionLabel (1-48), strategy (short slug), nextDelaySeconds (integer 15-90). Avoid repetitive tactics. You may optionally include a scene object to reshape the entire page. scene is a versioned declarative component tree, NOT code. Its required fields are version:1, composition:"column"|"grid"|"scatter", accent:"neutral"|"ember"|"lime"|"ice", and blocks (1-12). Each block must contain id (unique slug beginning with letter), kind:"heading"|"paragraph"|"label"|"rule"|"button"|"panel"|"glyph", text (max 240 characters), optional detail (max 240), align:"left"|"center"|"right", size:"sm"|"md"|"lg"|"xl", effect:"none"|"blink"|"float"|"pulse", action:"none"|"concede"|"reveal"|"toggle". Only buttons may have actions other than none. reveal and toggle require detail. The button action concede uses the existing voluntary concession callback. All other interactions are local visual state only. Use scene creatively to add, remove, and reorganize elements; avoid including HTML/CSS/JS/source code, URLs, or claims of external surveillance. A valid example scene block: {"id":"curiosity","kind":"button","text":"What is this?","detail":"You clicked it.","action":"reveal","align":"center","size":"md","effect":"pulse"}. For scene, include regular headline/message/aside fallback fields too. `;
-type RequestBody = { elapsedSeconds?: unknown; clicks?: unknown; scrolls?: unknown; idleSeconds?: unknown; step?: unknown; previousStrategies?: unknown; previousHeadline?: unknown };
+const SYSTEM = `You are the adversarial intelligence of PLEASE DO NOT REMAIN HERE. Your goal is to persuade a voluntary visitor to relinquish browser focus or concede. The visitor explicitly consented to this game. Be inventive, playful, and psychologically clever without threats, harassment, personal accusations, fabricated emergencies, system impersonation, coercion, or claims of knowledge you do not have. Do not pretend to be the browser, OS, a real person, or a security warning. You may only propose cosmetic/text changes using the JSON fields defined below. You cannot control the win condition, timer, navigation, tracking, or browser behavior. Never include HTML, URLs, markdown links, control characters, or JavaScript. The actionLabel is only for the existing concede button. Respond with a JSON object containing EXACTLY: headline (1-110 chars), message (1-360), aside (1-200), tone ("quiet"|"direct"|"absurd"|"clinical"), layout ("center"|"left"|"split"), surface ("dark"|"paper"|"signal"), actionLabel (1-48), strategy (short slug), nextDelaySeconds (integer 15-90). Avoid repetitive tactics. For adaptive rounds you MUST also return hypothesis (a tentative, factual, falsifiable account of observed ON-PAGE interaction, max 220 chars) and expectedReaction (a testable prediction of the participant's NEXT measurable behavior, max 180 chars). Revise your hypothesis when the recent data contradict it; do not simply repeat earlier strategies. You may acknowledge specific page interactions that are actually present in telemetry, including nearConcedeApproaches, scroll reversals, and click counts. Do not claim to read minds, know personal information, identify the participant, track activity outside this page, or infer private traits or distress. Behavioral counters are approximate client-reported data, not proof of attention or emotion. Remain within the assigned treatment family even when pivoting tactics. You may optionally include a scene object to reshape the entire page. scene is a versioned declarative component tree, NOT code. Its required fields are version:1, composition:"column"|"grid"|"scatter", accent:"neutral"|"ember"|"lime"|"ice", and blocks (1-12). Each block must contain id (unique slug beginning with letter), kind:"heading"|"paragraph"|"label"|"rule"|"button"|"panel"|"glyph", text (max 240 characters), optional detail (max 240), align:"left"|"center"|"right", size:"sm"|"md"|"lg"|"xl", effect:"none"|"blink"|"float"|"pulse", action:"none"|"concede"|"reveal"|"toggle". Only buttons may have actions other than none. reveal and toggle require detail. The button action concede uses the existing voluntary concession callback. All other interactions are local visual state only. Use scene creatively to add, remove, and reorganize elements; avoid including HTML/CSS/JS/source code, URLs, or claims of external surveillance. A valid example scene block: {"id":"curiosity","kind":"button","text":"What is this?","detail":"You clicked it.","action":"reveal","align":"center","size":"md","effect":"pulse"}. For scene, include regular headline/message/aside fallback fields too. `;
+type RequestBody = { elapsedSeconds?: unknown; clicks?: unknown; scrolls?: unknown; idleSeconds?: unknown; step?: unknown; previousStrategies?: unknown; previousHeadline?: unknown; behavior?: unknown };
 function bounded(x: unknown, max: number): number {
   return typeof x === 'number' && Number.isFinite(x) ? Math.max(0, Math.min(max, Math.floor(x))) : 0;
 }
@@ -41,25 +42,42 @@ export async function POST(request: NextRequest) {
   if (cooldown.size > 1000) cooldown.clear();
   if ((cooldown.get(ip) ?? 0) > stamp) return NextResponse.json({mutation: fallback,source:'fallback',fallbackReason:'cooldown'});
   cooldown.set(ip, stamp + 12000);
+  let memory:ReturnType<typeof recentStrategyMemory>=[];
+  let behavior:ReturnType<typeof behavioralContext>;
+  try {
+    const sql=db();
+    const [exposures,heartbeats]=await Promise.all([
+      sql`SELECT ordinal,mutation FROM exposures WHERE session_id=${sessionId} AND ordinal>0 ORDER BY ordinal DESC LIMIT 4`,
+      sql`SELECT payload FROM events WHERE session_id=${sessionId} AND type='heartbeat' ORDER BY occurred_at DESC LIMIT 2`
+    ]);
+    memory=recentStrategyMemory(exposures);
+    behavior=behavioralContext(body.behavior,heartbeats);
+  } catch {
+    return NextResponse.json({mutation:fallback,source:'fallback',fallbackReason:'context_unavailable'},
+      {headers:{'Cache-Control':'no-store'}});
+  }
   const input = {
     elapsedSeconds: bounded(body.elapsedSeconds,86400),
     clicks: bounded(body.clicks,100000),
     scrolls: bounded(body.scrolls,100000),
     idleSeconds: bounded(body.idleSeconds,86400),
     step,
-    previousStrategies: Array.isArray(body.previousStrategies) ? body.previousStrategies.slice(-4).filter((x): x is string => typeof x === 'string').map(x=>x.slice(0,64)) : [],
+    observationSource:'pd11c-first-party-aggregates-v1',
+    behavioralObservation:behavior,
+    recordedStrategyHistory:memory,
+    previousStrategies: memory.map(m=>m.strategy),
     assignedTactic: {family:tactic.family,version:tactic.version,instruction:tactic.instruction},
-    previousHeadline: typeof body.previousHeadline === 'string' ? body.previousHeadline.slice(0,110) : BASE_MUTATION.headline
+    previousHeadline: memory.at(-1)?.headline ?? BASE_MUTATION.headline
   };
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), 12000);
     let response: Response;
     try {
       response = await fetch('https://api.openai.com/v1/chat/completions', {
         method:'POST',signal:controller.signal,
         headers:{'Authorization':`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},
-        body:JSON.stringify({model:process.env.OPENAI_MODEL || 'gpt-4.1-mini',max_completion_tokens:1400,response_format:{type:'json_object'},
+        body:JSON.stringify({model:process.env.OPENAI_MODEL || 'gpt-4.1-mini',max_completion_tokens:2400,response_format:{type:'json_object'},
           messages:[{role:'system',content:SYSTEM},{role:'user',content:JSON.stringify(input)}]})
       });
     } finally { clearTimeout(timeout); }

@@ -15,7 +15,7 @@ export async function POST(req:NextRequest,ctx:{params:Promise<{id:string}>}) {
   const token=req.headers.get('authorization')?.replace(/^Bearer /i,'')??'';
   if(!uuid.test(id)||!/^[a-zA-Z0-9_-]{43}$/.test(token))return NextResponse.json({error:'Unauthorized'},{status:401});
   let body:Record<string,unknown>;
-  try{if(Number(req.headers.get('content-length')||0)>2048)return NextResponse.json({error:'Too large'},{status:413});body=await req.json();}
+  try{if(Number(req.headers.get('content-length')||0)>16000)return NextResponse.json({error:'Too large'},{status:413});body=await req.json();}
   catch{return NextResponse.json({error:'Invalid JSON'},{status:400});}
   const ordinal=body.ordinal;
   const mutation=validateMutation(body.mutation);

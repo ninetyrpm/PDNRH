@@ -14,6 +14,8 @@ export interface PageMutation {
   strategy: string;
   nextDelaySeconds: number;
   scene?: PageScene;
+  hypothesis?: string;
+  expectedReaction?: string;
 }
 export const BASE_MUTATION: PageMutation = {
   headline: 'PLEASE DO NOT REMAIN HERE.',
@@ -39,11 +41,15 @@ export function validateMutation(value: unknown): PageMutation | null {
       !surfaces.includes(v.surface as Surface) ||
       typeof v.nextDelaySeconds !== 'number' || !Number.isInteger(v.nextDelaySeconds) ||
       v.nextDelaySeconds < 15 || v.nextDelaySeconds > 90) return null;
+  const hypothesis=v.hypothesis===undefined?undefined:shortString(v.hypothesis,220);
+  const expectedReaction=v.expectedReaction===undefined?undefined:shortString(v.expectedReaction,180);
+  if((v.hypothesis!==undefined&&!hypothesis)||(v.expectedReaction!==undefined&&!expectedReaction))return null;
   const scene=v.scene===undefined?undefined:validateScene(v.scene);
   if(v.scene!==undefined&&!scene)return null;
   return { headline, message, aside, actionLabel, strategy,
     tone: v.tone as Tone, layout: v.layout as Layout, surface: v.surface as Surface,
-    nextDelaySeconds: v.nextDelaySeconds, ...(scene?{scene}: {}) };
+    nextDelaySeconds: v.nextDelaySeconds, ...(scene?{scene}: {}),
+    ...(hypothesis?{hypothesis}: {}),...(expectedReaction?{expectedReaction}: {}) };
 }
 const SCRIPTED: PageMutation[] = [
   {headline:'YOU CAN GO NOW.',message:'That was the entire experience. There is nothing more to discover.',aside:'No second act is scheduled.',tone:'direct',layout:'center',surface:'paper',actionLabel:'END THIS',strategy:'closure',nextDelaySeconds:32},
