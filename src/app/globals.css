@@ -43,3 +43,12 @@
 @keyframes pd-marquee{50%{translate:-15% 0}100%{translate:0 0}}
 @media(max-width:700px){.pd-scene-mosaic{grid-template-columns:repeat(2,minmax(0,1fr))}.pd-scene-mosaic .pd-block:nth-child(n){grid-column:auto;grid-row:auto}.pd-scene-mosaic .pd-block:nth-child(5n+1){grid-column:span 2}.pd-scene-poster{min-height:45vh;padding:20px}}
 @media(prefers-reduced-motion:reduce){.pd-marquee span{animation:none}}
+
+/* PD12A — Only this component can navigate away; the destination is code-owned. */
+.pd-kind-link{display:flex;align-items:stretch;justify-content:center}
+.pd-outbound{display:flex;flex-direction:column;align-items:stretch;gap:8px;max-width:100%;min-width:0}
+.pd-outbound-link,.pd-outbound-inactive{display:inline-flex;justify-content:center;align-items:center;min-height:48px;padding:14px 22px;color:inherit;text-decoration:none;border:2px solid var(--pd-accent);font:inherit;letter-spacing:inherit;overflow-wrap:anywhere}
+.pd-outbound-link:hover{background:var(--pd-accent);color:#101010}
+.pd-outbound-link:focus-visible{outline:3px solid currentColor;outline-offset:4px}
+.pd-outbound-inactive{opacity:.6;cursor:default}
+.pd-outbound-destination{font:11px/1.4 monospace;color:var(--muted);letter-spacing:.035em;text-align:center}

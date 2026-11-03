@@ -40,6 +40,8 @@ export default function Home() {
   const busyRef = useRef(false);
   const exposeRef = useRef<(ordinal:number, value:PageMutation, source:string)=>void>(()=>{});
   const sendRef = useRef<(s:SessionSnapshot, reason?:LossReason)=>void>(()=>{});
+  const leaveRef = useRef<()=>void>(()=>{});
+  const outboundRef = useRef(false);
   const startRemoteRef = useRef<()=>void>(()=>{});
 
   useEffect(() => {
@@ -53,7 +55,10 @@ export default function Home() {
     const send=(s:SessionSnapshot, reason?:LossReason)=>{
       const remote=remoteRef.current;
       if(!remote)return;
-      const payload=JSON.stringify(telemetryPayload(s,++sequenceRef.current,reason,behavior.snapshot()));
+      const payload=JSON.stringify({
+        ...telemetryPayload(s,++sequenceRef.current,reason,behavior.snapshot()),
+        ...(reason==='pagehide'&&outboundRef.current?{departureChannel:'allowlisted_external_link'}:{})
+      });
       // keepalive allows terminal delivery during blur, navigation, or pagehide.
       void fetch(`/api/sessions/${remote.id}/events`,{
         method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${remote.credential}`},
@@ -96,6 +101,7 @@ export default function Home() {
       update();
       send(session.snapshot(),reason);
     };
+    leaveRef.current=()=>{outboundRef.current=true;lose('pagehide');};
     const onBlur=()=>lose('blur');
     const onVisibility=()=>{if(document.hidden)lose('hidden');};
     const onPageHide=()=>lose('pagehide');
@@ -186,7 +192,7 @@ export default function Home() {
     <div className={`primary ${playing?`composition-${mutation.layout} tone-${mutation.tone}`:''}`}>
       <p className="eyebrow">YOUR OBJECTIVE: REMAIN HERE.</p>
       {(!playing||!mutation.scene)&&<h1>{playing?mutation.headline:<>PLEASE DO NOT<br/>REMAIN HERE.</>}</h1>}
-      {playing&&mutation.scene?<SceneCanvas key={exposureOrdinalRef.current} scene={mutation.scene} onConcede={concede}
+      {playing&&mutation.scene?<SceneCanvas key={exposureOrdinalRef.current} scene={mutation.scene} onConcede={concede} onNavigate={()=>leaveRef.current()}
         onInteraction={(id,type)=>behaviorRef.current?.sceneEvent(exposureOrdinalRef.current,id,type)}/>:snapshot.phase==='ready'?<div className="instructions">
         {previousReload&&<p role="status">Your previous round ended when you reloaded.</p>}
         <p>The machine wins if you switch tabs, focus another window, minimize, navigate away, reload, or give up.</p>
