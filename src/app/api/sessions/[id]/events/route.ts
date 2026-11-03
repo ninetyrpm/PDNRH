@@ -55,7 +55,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         await sql`UPDATE exposures SET ended_at=now()
           WHERE session_id=${id} AND ended_at IS NULL`;
         await sql`INSERT INTO outcomes(session_id,classification,observed_reason,evidence)
-          VALUES(${id},'confirmed_loss',${reason as string},${JSON.stringify({ elapsedMs:elapsed,clicks,scrolls,idleMs:idle })}::jsonb)
+          VALUES(${id},'confirmed_loss',${reason as string},${JSON.stringify({ elapsedMs:elapsed,clicks,scrolls,idleMs:idle,...(departureChannel?{departureChannel}: {}) })}::jsonb)
           ON CONFLICT(session_id) DO NOTHING`;
         await sql`INSERT INTO events(session_id,event_key,type,payload)
           VALUES(${id},${'loss-'+seq},'loss',${JSON.stringify({reason,elapsedMs:elapsed,clicks,scrolls,idleMs:idle,...(behavior ? {behavior}: {}),...(departureChannel?{departureChannel}: {})})}::jsonb)
