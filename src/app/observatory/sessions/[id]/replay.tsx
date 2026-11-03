@@ -1,6 +1,7 @@
 'use client';
 import { useEffect,useState } from 'react';
 import type { PageMutation } from '@/lib/mutation';
+import SceneCanvas from '@/app/scene-canvas';
 
 type Frame={ordinal:number;source:string;start:number;end:number|null;mutation:PageMutation};
 export default function Replay({frames,startedAt,endedAt}:{frames:Frame[];startedAt:number;endedAt:number|null}){
@@ -25,7 +26,7 @@ export default function Replay({frames,startedAt,endedAt}:{frames:Frame[];starte
     <input className="obs-replay-scrubber" type="range" min={0} max={duration} step={100} value={time} onChange={e=>{setTime(Number(e.target.value));setPlaying(false);}} aria-label="Replay time"/>
     <div className={'obs-replay-stage '+(visible?'obs-replay-'+visible.surface:'obs-replay-unknown')}>
       <div className="obs-replay-top"><span>PLEASE DO NOT REMAIN HERE / RECONSTRUCTION</span><span>{visible?'EXPOSURE '+active?.ordinal+' / '+active?.source:'NO RECORDED EXPOSURE'}</span></div>
-      {visible?<div className={'obs-replay-body obs-replay-layout-'+visible.layout+' obs-replay-tone-'+visible.tone}>
+      {visible?.scene?<SceneCanvas key={active?.ordinal} scene={visible.scene} readOnly/>:visible?<div className={'obs-replay-body obs-replay-layout-'+visible.layout+' obs-replay-tone-'+visible.tone}>
         <span>YOUR OBJECTIVE: REMAIN HERE.</span><h3>{visible.headline}</h3><p>{visible.message}</p><p>{visible.aside}</p></div>:
         <div className="obs-replay-body"><h3>UNOBSERVED INTERVAL.</h3><p>There is no reliable exposure record for this point in the session.</p></div>}
       <div className="obs-replay-bottom"><span>REPLAY / NOT INTERACTIVE</span><span className="obs-replay-action">{visible?.actionLabel??'NO ACTION'}</span></div>
