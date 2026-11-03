@@ -4,7 +4,7 @@ import { hashCredential } from '@/lib/experiment';
 import { validateBehavior } from '@/lib/behavior';
 
 export const runtime = 'nodejs';
-const reasons = ['blur', 'hidden', 'pagehide', 'concede', 'reload', 'external_link'] as const;
+const reasons = ['blur', 'hidden', 'pagehide', 'concede', 'reload'] as const;
 type LossReason = typeof reasons[number];
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function count(n: unknown, max: number) {
@@ -26,6 +26,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const scrolls = count(body.scrolls, 1000000);
   const idle = count(body.idleMs, 86400000);
   const reason = body.reason;
+  const departureChannel = body.departureChannel;
+  if(departureChannel!==undefined && !(type==='loss'&&reason==='pagehide'&&departureChannel==='allowlisted_external_link'))
+    return NextResponse.json({error:'Invalid departure channel'},{status:400});
   const behavior = body.behavior === undefined ? null : validateBehavior(body.behavior);
   if(body.behavior!==undefined&&!behavior)return NextResponse.json({error:'Invalid behavioral summary'},{status:400});
   if ((type !== 'heartbeat' && type !== 'loss') || seq === null || elapsed === null ||
@@ -45,7 +48,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       await sql`UPDATE sessions SET last_seen_at=now() WHERE id=${id} AND status='active'`;
     } else {
       const updated = await sql`UPDATE sessions SET status='confirmed_loss',ended_at=now(),last_seen_at=now(),
-        loss_reason=${reason as string},elapsed_ms=${elapsed}
+        loss_reason=${reason as string},exit_channel=${departureChannel==='allowlisted_external_link'?'allowlisted_external_link':null},elapsed_ms=${elapsed}
         WHERE id=${id} AND status='active' RETURNING id`;
       if (updated.length) {
         // Close all open exposures at the server-observed terminal time.
@@ -55,7 +58,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           VALUES(${id},'confirmed_loss',${reason as string},${JSON.stringify({ elapsedMs:elapsed,clicks,scrolls,idleMs:idle })}::jsonb)
           ON CONFLICT(session_id) DO NOTHING`;
         await sql`INSERT INTO events(session_id,event_key,type,payload)
-          VALUES(${id},${'loss-'+seq},'loss',${JSON.stringify({reason,elapsedMs:elapsed,clicks,scrolls,idleMs:idle,...(behavior ? {behavior}: {})})}::jsonb)
+          VALUES(${id},${'loss-'+seq},'loss',${JSON.stringify({reason,elapsedMs:elapsed,clicks,scrolls,idleMs:idle,...(behavior ? {behavior}: {}),...(departureChannel?{departureChannel}: {})})}::jsonb)
           ON CONFLICT(session_id,event_key) DO NOTHING`;
       }
     }
