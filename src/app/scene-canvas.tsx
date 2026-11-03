@@ -18,7 +18,7 @@ export default function SceneCanvas({scene,onConcede,onNavigate,readOnly=false,o
     aria-label="Adversary-authored page">
     {scene.blocks.map(block=><div key={block.id} data-scene-block={block.id}
       onPointerEnter={()=>{if(!readOnly)onInteraction?.(block.id,'hover');}}
-      onClick={()=>{if(!readOnly)onInteraction?.(block.id,'click');}}
+      onClick={()=>{if(!readOnly && block.kind!=='link')onInteraction?.(block.id,'click');}}
       className={['pd-block','pd-kind-'+block.kind,'pd-size-'+block.size,'pd-align-'+block.align,'pd-effect-'+block.effect].join(' ')}>
       {block.kind==='rule'?<hr/>:
        block.kind==='void'?<div className="pd-void" aria-label={block.text}><span>{block.text}</span></div>:
@@ -27,8 +27,10 @@ export default function SceneCanvas({scene,onConcede,onNavigate,readOnly=false,o
        block.kind==='link'?<div className="pd-outbound">
          {readOnly?<span className="pd-outbound-inactive">{block.text}</span>:
          <a href={DEPARTURE_URL} className="pd-outbound-link" onClick={event=>{
-           if(event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey)
+           if(event.button===0&&!event.metaKey&&!event.ctrlKey&&!event.shiftKey&&!event.altKey){
+             onInteraction?.(block.id,'click');
              onNavigate?.();
+           }
          }}>{block.text}</a>}
          <span className="pd-outbound-destination">{DEPARTURE_LABEL}</span>
        </div>:
