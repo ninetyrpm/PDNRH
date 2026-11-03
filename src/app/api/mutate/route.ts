@@ -15,7 +15,7 @@ function bounded(x: unknown, max: number): number {
 const cooldown = new Map<string,number>();
 export async function POST(request: NextRequest) {
   let body: RequestBody;
-  try { if (Number(request.headers.get('content-length') ?? 0) > 4096) return NextResponse.json({error:'Request too large'}, {status:413}); body = await request.json(); }
+  try { if (Number(request.headers.get('content-length') ?? 0) > 8192) return NextResponse.json({error:'Request too large'}, {status:413}); body = await request.json(); }
   catch { return NextResponse.json({error:'Invalid request'}, {status:400}); }
   const sessionId=request.headers.get('x-session-id') ?? '';
   const token=request.headers.get('authorization')?.replace(/^Bearer /i,'') ?? '';
