@@ -2,8 +2,9 @@
 import { useState } from 'react';
 import type { PageScene, SceneBlock } from '@/lib/scene';
 
-export default function SceneCanvas({scene,onConcede,readOnly=false}:{
-  scene:PageScene;onConcede?:()=>void;readOnly?:boolean
+export default function SceneCanvas({scene,onConcede,readOnly=false,onInteraction}:{
+  scene:PageScene;onConcede?:()=>void;readOnly?:boolean;
+  onInteraction?:(id:string,type:'hover'|'click')=>void
 }){
   const [revealed,setRevealed]=useState<Record<string,boolean>>({});
   function activate(block:SceneBlock){
@@ -15,8 +16,13 @@ export default function SceneCanvas({scene,onConcede,readOnly=false}:{
   return <div className={['pd-scene','pd-scene-'+scene.composition,'pd-accent-'+scene.accent].join(' ')}
     aria-label="Adversary-authored page">
     {scene.blocks.map(block=><div key={block.id} data-scene-block={block.id}
+      onPointerEnter={()=>{if(!readOnly)onInteraction?.(block.id,'hover');}}
+      onClick={()=>{if(!readOnly)onInteraction?.(block.id,'click');}}
       className={['pd-block','pd-kind-'+block.kind,'pd-size-'+block.size,'pd-align-'+block.align,'pd-effect-'+block.effect].join(' ')}>
       {block.kind==='rule'?<hr/>:
+       block.kind==='void'?<div className="pd-void" aria-label={block.text}><span>{block.text}</span></div>:
+       block.kind==='meter'?<div className="pd-meter"><span>{block.text}</span><div className="pd-meter-track"><div/></div></div>:
+       block.kind==='marquee'?<div className="pd-marquee"><span>{block.text}</span></div>:
        block.kind==='button'?<button type="button" disabled={readOnly&&block.action!=='none'}
          data-pdnrh-concede={block.action==='concede'?'true':undefined}
          onClick={()=>activate(block)}>{block.text}</button>:
