@@ -1,4 +1,4 @@
-import {validateScene,type PageScene,type SceneBlock} from './scene';
+import {validateScene,type PageScene,type SceneBlock,type SceneReflex} from './scene';
 
 /** Validated declarative patch language: no HTML, scripts, selectors, URLs or DOM access. */
 export type PagePatchStep =
@@ -10,6 +10,7 @@ export type PagePatch={
   version:1;
   composition?:PageScene['composition'];
   accent?:PageScene['accent'];
+  reflexes?:SceneReflex[];
   steps:PagePatchStep[];
 };
 const idPattern=/^[a-z][a-z0-9_-]{0,31}$/;
@@ -28,6 +29,7 @@ export function validatePagePatch(value:unknown):PagePatch|null{
   if(composition!==undefined&&!['column','grid','scatter','poster','terminal','mosaic'].includes(String(composition)))return null;
   const accent=raw.accent;
   if(accent!==undefined&&!['neutral','ember','lime','ice'].includes(String(accent)))return null;
+  if(raw.reflexes!==undefined&&(!Array.isArray(raw.reflexes)||raw.reflexes.length>8))return null;
   const steps:PagePatchStep[]=[];
   for(const value of raw.steps){
     const step=record(value);
@@ -50,7 +52,8 @@ export function validatePagePatch(value:unknown):PagePatch|null{
     }else return null;
   }
   return {version:1,...(composition?{composition:composition as PageScene['composition']}:{}),
-    ...(accent?{accent:accent as PageScene['accent']}:{}),steps};
+    ...(accent?{accent:accent as PageScene['accent']}:{}),
+    ...(raw.reflexes!==undefined?{reflexes:raw.reflexes as SceneReflex[]}:{}),steps};
 }
 /** Atomic application. Any invalid reference or intermediate state rejects the full patch. */
 export function applyPagePatch(base:PageScene|undefined,raw:unknown):{scene:PageScene;patch:PagePatch}|null{
@@ -83,6 +86,7 @@ export function applyPagePatch(base:PageScene|undefined,raw:unknown):{scene:Page
     }
   }
   const scene=validateScene({version:1,composition:patch.composition??base.composition,
-    accent:patch.accent??base.accent,blocks});
+    accent:patch.accent??base.accent,blocks,
+    reflexes:patch.reflexes??base.reflexes});
   return scene?{scene,patch}:null;
 }
