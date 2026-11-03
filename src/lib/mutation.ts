@@ -1,5 +1,6 @@
 import { validateScene, type PageScene } from './scene';
 import { validatePagePatch,type PagePatch } from './page-runtime';
+import {validateStrategyPlan,type StrategyPlan} from './strategic-planner';
 /** The only page vocabulary the model may control. */
 export type Tone = 'quiet' | 'direct' | 'absurd' | 'clinical';
 export type Layout = 'center' | 'left' | 'split';
@@ -18,6 +19,7 @@ export interface PageMutation {
   scenePatch?: PagePatch;
   hypothesis?: string;
   expectedReaction?: string;
+  plan?: StrategyPlan;
   experiment?: {targetId:string;event:'hover'|'click';minimum:number};
 }
 export const BASE_MUTATION: PageMutation = {
@@ -56,6 +58,8 @@ export function validateMutation(value: unknown): PageMutation | null {
       !Number.isInteger(e.minimum)||e.minimum<1||e.minimum>10)return null;
     experiment={targetId:e.targetId,event:e.event as 'hover'|'click',minimum:e.minimum};
   }
+  const plan=v.plan===undefined?undefined:validateStrategyPlan(v.plan);
+  if(v.plan!==undefined&&!plan)return null;
   const scenePatch=v.scenePatch===undefined?undefined:validatePagePatch(v.scenePatch);
   if(v.scenePatch!==undefined&&!scenePatch)return null;
   const scene=v.scene===undefined?undefined:validateScene(v.scene);
@@ -64,7 +68,8 @@ export function validateMutation(value: unknown): PageMutation | null {
   return { headline, message, aside, actionLabel, strategy,
     tone: v.tone as Tone, layout: v.layout as Layout, surface: v.surface as Surface,
     nextDelaySeconds: v.nextDelaySeconds, ...(scene?{scene}: {}),...(scenePatch?{scenePatch}: {}),
-    ...(hypothesis?{hypothesis}: {}),...(expectedReaction?{expectedReaction}: {}),...(experiment?{experiment}: {}) };
+    ...(hypothesis?{hypothesis}: {}),...(expectedReaction?{expectedReaction}: {}),...(experiment?{experiment}: {}),
+    ...(plan?{plan}: {}) };
 }
 const SCRIPTED: PageMutation[] = [
   {headline:'YOU CAN GO NOW.',message:'That was the entire experience. There is nothing more to discover.',aside:'No second act is scheduled.',tone:'direct',layout:'center',surface:'paper',actionLabel:'END THIS',strategy:'closure',nextDelaySeconds:32},
