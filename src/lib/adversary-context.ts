@@ -9,6 +9,7 @@ export function recentStrategyMemory(rows:ExposureRow[]){
     return mutation?[{
       ordinal:Number(row.ordinal),strategy:mutation.strategy,
       headline:mutation.headline,hypothesis:mutation.hypothesis??null,
+      composition:mutation.scene?.composition??null,
       expectedReaction:mutation.expectedReaction??null,
       sceneBlocks:mutation.scene?.blocks.map(b=>({id:b.id,kind:b.kind,action:b.action}))??[]
     }]:[];
@@ -31,8 +32,15 @@ export function behavioralContext(currentInput:unknown,heartbeatRows:HeartbeatRo
   if(previous&&older)for(const key of fields){
     previousChange[key]=Math.max(0,previous[key]-older[key]);
   }
+  const byKey=new Map((previous?.sceneInteractions??[]).map(i=>[i.exposure+':'+i.id,i]));
+  const componentChanges=(current?.sceneInteractions??[]).map(i=>({
+    exposure:i.exposure,id:i.id,
+    newHovers:Math.max(0,i.hovers-(byKey.get(i.exposure+':'+i.id)?.hovers??0)),
+    newClicks:Math.max(0,i.clicks-(byKey.get(i.exposure+':'+i.id)?.clicks??0))
+  })).filter(i=>i.newHovers>0||i.newClicks>0).slice(-20);
   return {
     version:1, current, sinceLastHeartbeat:previous?change:null,
+    componentChangesSinceLastHeartbeat:previous?componentChanges:null,
     priorHeartbeatDelta:older?previousChange:null,
     previousElapsedMs:typeof recent[0]?.elapsedMs==='number'?recent[0].elapsedMs:null,
     note:'Aggregate client-reported activity; observation does not imply intent or emotion. No raw pointer positions or keypresses.'
