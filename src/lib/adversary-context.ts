@@ -12,6 +12,7 @@ export function recentStrategyMemory(rows:ExposureRow[]){
       composition:mutation.scene?.composition??null,
       expectedReaction:mutation.expectedReaction??null,
       experiment:mutation.experiment??null,
+      plan:mutation.plan??null,
       sceneReflexes:mutation.scene?.reflexes?.map(r=>({id:r.id,targetId:r.targetId,trigger:r.trigger,effect:r.effect}))??[],
       sceneBlocks:mutation.scene?.blocks.map(b=>({id:b.id,kind:b.kind,action:b.action}))??[]
     }]:[];
