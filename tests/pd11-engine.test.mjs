@@ -124,3 +124,47 @@ test('PD11E fallback is a marked, structurally valid scene',()=>{
     assert.ok(fallback.strategy.startsWith('creative-fallback-'));
   }
 });
+
+
+test('PD12A: link is a distinct typed scene action, not a user-supplied destination',()=>{
+  const departure=load('departure');
+  assert.equal(departure.DEPARTURE_URL,'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  const linkBlock={
+    id:'leave',kind:'link',action:'navigate',
+    text:'Watch on YouTube',detail:'',size:'lg',align:'center',effect:'pulse'
+  };
+  const valid=scene.validateScene(makeScene([linkBlock]));
+  assert.equal(valid.blocks[0].action,'navigate');
+  assert.equal(valid.blocks[0].kind,'link');
+  assert.equal(Object.prototype.hasOwnProperty.call(valid.blocks[0],'href'),false);
+  // External input cannot override or create a destination in the validated scene.
+  const malicious=scene.validateScene(makeScene([{...linkBlock,
+    href:'https://attacker.example/move',target:'_blank',onClick:'doBadThings()'}]));
+  assert.deepEqual(malicious,valid);
+  assert.equal(scene.validateScene(makeScene([{...linkBlock,action:'none'}])),null);
+  assert.equal(scene.validateScene(makeScene([{...linkBlock,kind:'button'}])),null);
+  assert.equal(scene.validateScene(makeScene([{...linkBlock,kind:'paragraph'}])),null);
+  assert.equal(scene.validateScene(makeScene([{...linkBlock,text:'https://another.example'}])),null);
+});
+test('PD12A: outgoing link qualifies as creative interactive affordance',()=>{
+  const linkBlock={id:'leave',kind:'link',action:'navigate',
+    text:'Leave for YouTube',detail:'',size:'md',align:'center',effect:'pulse'};
+  const visual=scene.validateScene(makeScene([
+    {id:'graphic',kind:'glyph',text:'↗',detail:'',align:'center',size:'xl',effect:'none',action:'none'},
+    {id:'title',kind:'heading',text:'THE EXIT',detail:'',align:'center',size:'xl',effect:'none',action:'none'},
+    linkBlock
+  ]));
+  assert.equal(scene.isCreativeScene(visual),true);
+  const enriched=mutation.validateMutation({...mutation.BASE_MUTATION,scene:visual,
+    hypothesis:'An explicit departure might be chosen.',
+    expectedReaction:'The visitor clicks the link.',
+    experiment:{targetId:'leave',event:'click',minimum:1}});
+  assert.equal(load('creative-engine').validateCreativeMutation(enriched),true);
+});
+test('PD12A: renderer hardcodes the single URL and does not render arbitrary model links',()=>{
+  const renderer=fs.readFileSync(new URL('../src/app/scene-canvas.tsx',import.meta.url),'utf8');
+  assert.match(renderer,/href=\{DEPARTURE_URL\}/);
+  assert.match(renderer,/onNavigate\?\.\(\)/);
+  assert.doesNotMatch(renderer,/href=\{block\./);
+  assert.match(renderer,/DEPARTURE_LABEL/);
+});
