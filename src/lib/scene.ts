@@ -1,8 +1,8 @@
 /** The model authors a declarative scene, never executable browser code.
  * Only the protected game controller may finish a round.
  */
-export type SceneKind='heading'|'paragraph'|'label'|'rule'|'button'|'panel'|'glyph'|'meter'|'marquee'|'void';
-export type SceneAction='none'|'concede'|'reveal'|'toggle';
+export type SceneKind='heading'|'paragraph'|'label'|'rule'|'button'|'panel'|'glyph'|'meter'|'marquee'|'void'|'link';
+export type SceneAction='none'|'concede'|'reveal'|'toggle'|'navigate';
 export type SceneBlock={
   id:string;kind:SceneKind;text:string;detail:string;align:'left'|'center'|'right';
   size:'sm'|'md'|'lg'|'xl';effect:'none'|'blink'|'float'|'pulse';action:SceneAction;
@@ -12,9 +12,9 @@ export type PageScene={
   accent:'neutral'|'ember'|'lime'|'ice';blocks:SceneBlock[];
 };
 const allowed={
-  kind:['heading','paragraph','label','rule','button','panel','glyph','meter','marquee','void'],
+  kind:['heading','paragraph','label','rule','button','panel','glyph','meter','marquee','void','link'],
   align:['left','center','right'],size:['sm','md','lg','xl'],
-  effect:['none','blink','float','pulse'],action:['none','concede','reveal','toggle']
+  effect:['none','blink','float','pulse'],action:['none','concede','reveal','toggle','navigate']
 } as const;
 function safeText(v:unknown,max:number){
   return typeof v==='string'&&v.length<=max&&!/[\u0000-\u001f\u007f]/.test(v)&&!/<[^>]*>|https?:\/\/|javascript:/i.test(v)?v.trim():null;
@@ -37,7 +37,10 @@ export function validateScene(value:unknown):PageScene|null{
       !allowed.size.includes(size as SceneBlock['size'])||!allowed.effect.includes(effect as SceneBlock['effect'])||
       !allowed.action.includes(action as SceneAction))return null;
     const text=safeText(r.text??'',240),detail=safeText(r.detail??'',240);
-    if(text===null||detail===null||(kind!=='rule'&&!text)|| (action!=='none'&&kind!=='button') ||
+    if(text===null||detail===null||(kind!=='rule'&&!text)||
+      (action==='navigate'&&kind!=='link')||
+      (kind==='link'&&action!=='navigate')||
+      (action!=='none'&&action!=='navigate'&&kind!=='button')||
       ((action==='reveal'||action==='toggle')&&!detail))return null;
     blocks.push({id:r.id,kind:kind as SceneKind,text,detail,
       align:align as SceneBlock['align'],size:size as SceneBlock['size'],
@@ -53,6 +56,7 @@ export function validateScene(value:unknown):PageScene|null{
  */
 export function isCreativeScene(scene:PageScene|undefined):scene is PageScene{
   return !!scene && scene.blocks.length>=3 &&
-    scene.blocks.some(b=>b.kind==='button'&&(b.action==='reveal'||b.action==='toggle')) &&
+    scene.blocks.some(b=>(b.kind==='button'&&(b.action==='reveal'||b.action==='toggle'))||
+      (b.kind==='link'&&b.action==='navigate')) &&
     scene.blocks.some(b=>['glyph','meter','void','rule'].includes(b.kind));
 }
