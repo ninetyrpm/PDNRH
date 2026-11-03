@@ -80,3 +80,47 @@ test('session memory references recorded hypothesis and compares heartbeat delta
   assert.equal(change.sinceLastHeartbeat.pointerTravelPx,30);
   assert.equal(change.sinceLastHeartbeat.scrollDown,2);
 });
+
+test('PD11E rejects text-only and noninteractive visual arrangements',()=>{
+  const engine=load('creative-engine');
+  assert.equal(engine.validateCreativeMutation(mutation.validateMutation(mutation.BASE_MUTATION)),false);
+  const visual=makeScene([
+    {id:'mark',kind:'void',text:'◯',detail:'',size:'xl',align:'center',effect:'pulse',action:'none'},
+    {id:'title',kind:'heading',text:'THE END',detail:'',size:'xl',align:'center',effect:'none',action:'none'},
+    block()
+  ]);
+  const candidate=mutation.validateMutation({...mutation.BASE_MUTATION,scene:visual,
+    hypothesis:'A pointer may approach the prompt.',
+    expectedReaction:'At least one click on curiosity.',
+    experiment:{targetId:'curiosity',event:'click',minimum:1}});
+  assert.equal(engine.validateCreativeMutation(candidate),true);
+  assert.equal(engine.isStructurallyNovel(candidate,{composition:'terminal',sceneBlocks:[]}),true);
+  assert.equal(engine.isStructurallyNovel(candidate,{composition:'scatter',sceneBlocks:visual.blocks}),false);
+  assert.equal(mutation.validateMutation({...mutation.BASE_MUTATION,scene:visual,
+    experiment:{targetId:'missing',event:'click',minimum:1}}),null);
+  assert.equal(engine.validateCreativeMutation(mutation.validateMutation({...candidate,experiment:undefined})),false);
+});
+test('PD11E validates only aggregate per-component counts and evaluates deltas',()=>{
+  const collector=behavior.makeBehaviorCollector(1000);
+  collector.sceneEvent(2,'curiosity','hover');
+  collector.sceneEvent(2,'curiosity','click');
+  const first=collector.snapshot();
+  assert.equal(first.sceneInteractions[0].hovers,1);
+  assert.equal(first.sceneInteractions[0].clicks,1);
+  assert.equal(behavior.validateBehavior(first).sceneInteractions[0].id,'curiosity');
+  assert.equal(behavior.validateBehavior({...first,sceneInteractions:[{exposure:2,id:'curiosity',hovers:-1,clicks:0}]}),null);
+  collector.sceneEvent(2,'curiosity','click');
+  const now=collector.snapshot();
+  const derived=context.behavioralContext(now,[{payload:{elapsedMs:15000,behavior:first}}]);
+  assert.equal(derived.componentChangesSinceLastHeartbeat[0].newClicks,1);
+  assert.equal(derived.componentChangesSinceLastHeartbeat[0].newHovers,0);
+  assert.equal('x' in now.sceneInteractions[0],false);
+});
+test('PD11E fallback is a marked, structurally valid scene',()=>{
+  const engine=load('creative-engine');
+  for(let i=0;i<3;i++){
+    const fallback=engine.creativeFallback(i);
+    assert.equal(engine.validateCreativeMutation(mutation.validateMutation(fallback)),true);
+    assert.ok(fallback.strategy.startsWith('creative-fallback-'));
+  }
+});
