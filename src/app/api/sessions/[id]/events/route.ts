@@ -16,7 +16,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   if (!uuid.test(id) || !token || !/^[a-zA-Z0-9_-]{43}$/.test(token)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   let body: Record<string, unknown>;
   try {
-    if (Number(request.headers.get('content-length') || 0) > 2048) return NextResponse.json({ error: 'Too large' }, { status: 413 });
+    if (Number(request.headers.get('content-length') || 0) > 8192) return NextResponse.json({ error: 'Too large' }, { status: 413 });
     body = await request.json();
   } catch { return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 }); }
   const type = body.type;
