@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hashCredential } from '@/lib/experiment';
+import { validateBehavior } from '@/lib/behavior';
 
 export const runtime = 'nodejs';
 const reasons = ['blur', 'hidden', 'pagehide', 'concede', 'reload'] as const;
@@ -25,6 +26,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   const scrolls = count(body.scrolls, 1000000);
   const idle = count(body.idleMs, 86400000);
   const reason = body.reason;
+  const behavior = body.behavior === undefined ? null : validateBehavior(body.behavior);
+  if(body.behavior!==undefined&&!behavior)return NextResponse.json({error:'Invalid behavioral summary'},{status:400});
   if ((type !== 'heartbeat' && type !== 'loss') || seq === null || elapsed === null ||
       clicks === null || scrolls === null || idle === null ||
       (type === 'loss' && !reasons.includes(reason as LossReason)) ||
@@ -37,7 +40,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     if (type === 'heartbeat') {
       // One ordered key per client event; duplicate delivery remains idempotent.
       await sql`INSERT INTO events(session_id,event_key,type,payload)
-        VALUES(${id},${'heartbeat-'+seq},'heartbeat',${JSON.stringify({ elapsedMs: elapsed, clicks, scrolls, idleMs: idle })}::jsonb)
+        VALUES(${id},${'heartbeat-'+seq},'heartbeat',${JSON.stringify({ elapsedMs: elapsed, clicks, scrolls, idleMs: idle, ...(behavior ? {behavior} : {}) })}::jsonb)
         ON CONFLICT(session_id,event_key) DO NOTHING`;
       await sql`UPDATE sessions SET last_seen_at=now() WHERE id=${id} AND status='active'`;
     } else {
@@ -52,7 +55,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
           VALUES(${id},'confirmed_loss',${reason as string},${JSON.stringify({ elapsedMs:elapsed,clicks,scrolls,idleMs:idle })}::jsonb)
           ON CONFLICT(session_id) DO NOTHING`;
         await sql`INSERT INTO events(session_id,event_key,type,payload)
-          VALUES(${id},${'loss-'+seq},'loss',${JSON.stringify({reason,elapsedMs:elapsed,clicks,scrolls,idleMs:idle})}::jsonb)
+          VALUES(${id},${'loss-'+seq},'loss',${JSON.stringify({reason,elapsedMs:elapsed,clicks,scrolls,idleMs:idle,...(behavior ? {behavior}: {})})}::jsonb)
           ON CONFLICT(session_id,event_key) DO NOTHING`;
       }
     }
