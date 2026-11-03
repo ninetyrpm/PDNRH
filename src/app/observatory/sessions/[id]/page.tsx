@@ -43,7 +43,7 @@ export default async function SessionInspector({params}:{params:Promise<{id:stri
           <p className="obs-note">{stamp(e.displayed_at)} → {stamp(e.ended_at)}</p>
           <h3>{text(m.headline)}</h3><p>{text(m.message)}</p><p className="obs-aside">{text(m.aside)}</p>
           {typeof m.hypothesis==='string'&&<p className="obs-note"><strong>BEHAVIORAL HYPOTHESIS</strong> · {text(m.hypothesis)}</p>}{typeof m.expectedReaction==='string'&&<p className="obs-note"><strong>EXPECTED REACTION</strong> · {text(m.expectedReaction)}</p>}
-          {m.experiment&&typeof m.experiment==='object'&&<p className="obs-note"><strong>ELEMENT TEST</strong> · {JSON.stringify(m.experiment)}</p>}
+          {typeof m.experiment==='object'&&m.experiment!==null&&<p className="obs-note"><strong>ELEMENT TEST</strong> · {JSON.stringify(m.experiment)}</p>}
           <div className="obs-tags"><span>TONE {text(m.tone)}</span><span>LAYOUT {text(m.layout)}</span><span>SURFACE {text(m.surface)}</span><span>STRATEGY {text(m.strategy)}</span><span>BUTTON {text(m.actionLabel)}</span></div>
         </article>;})}
       {!exposures.length&&<p className="obs-note">No exposures were recorded.</p>}
