@@ -42,7 +42,7 @@ export default async function SessionInspector({params}:{params:Promise<{id:stri
         return <article className="obs-exposure" key={String(e.ordinal)}><div className="obs-exposure-meta"><strong>#{text(e.ordinal)} / {text(e.source)}</strong><span>{text(e.strategy_family)} v{text(e.strategy_version)}</span><span>{duration}</span></div>
           <p className="obs-note">{stamp(e.displayed_at)} → {stamp(e.ended_at)}</p>
           <h3>{text(m.headline)}</h3><p>{text(m.message)}</p><p className="obs-aside">{text(m.aside)}</p>
-          {m.hypothesis&&<p className="obs-note"><strong>BEHAVIORAL HYPOTHESIS</strong> · {text(m.hypothesis)}</p>}{m.expectedReaction&&<p className="obs-note"><strong>EXPECTED REACTION</strong> · {text(m.expectedReaction)}</p>}
+          {typeof m.hypothesis==='string'&&<p className="obs-note"><strong>BEHAVIORAL HYPOTHESIS</strong> · {text(m.hypothesis)}</p>}{typeof m.expectedReaction==='string'&&<p className="obs-note"><strong>EXPECTED REACTION</strong> · {text(m.expectedReaction)}</p>}
           <div className="obs-tags"><span>TONE {text(m.tone)}</span><span>LAYOUT {text(m.layout)}</span><span>SURFACE {text(m.surface)}</span><span>STRATEGY {text(m.strategy)}</span><span>BUTTON {text(m.actionLabel)}</span></div>
         </article>;})}
       {!exposures.length&&<p className="obs-note">No exposures were recorded.</p>}
