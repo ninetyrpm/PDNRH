@@ -26,6 +26,8 @@ export function creativeFallback(step:number):PageMutation {
     expectedReaction:'Observe any on-page interaction without attributing intent.',
     experiment:{targetId:'choice',event:'click',minimum:1},
     scene:{
+      reflexes:[{id:'waiting_reaction',targetId:'choice',trigger:'hover',threshold:1,
+        effect:'highlight',text:''}],
       version:1,composition:(['poster','terminal','mosaic'] as const)[n],
       accent:(['ember','ice','lime'] as const)[n],
       blocks:[
