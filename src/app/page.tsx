@@ -192,7 +192,7 @@ export default function Home() {
     <div className={`primary ${playing?`composition-${mutation.layout} tone-${mutation.tone}`:''}`}>
       <p className="eyebrow">YOUR OBJECTIVE: REMAIN HERE.</p>
       {(!playing||!mutation.scene)&&<h1>{playing?mutation.headline:<>PLEASE DO NOT<br/>REMAIN HERE.</>}</h1>}
-      {playing&&mutation.scene?<SceneCanvas key={exposureOrdinalRef.current} scene={mutation.scene} onConcede={concede} onNavigate={()=>leaveRef.current()}
+      {playing&&mutation.scene?<SceneCanvas scene={mutation.scene} onConcede={concede} onNavigate={()=>leaveRef.current()}
         onInteraction={(id,type)=>behaviorRef.current?.sceneEvent(exposureOrdinalRef.current,id,type)}/>:snapshot.phase==='ready'?<div className="instructions">
         {previousReload&&<p role="status">Your previous round ended when you reloaded.</p>}
         <p>The machine wins if you switch tabs, focus another window, minimize, navigate away, reload, or give up.</p>
