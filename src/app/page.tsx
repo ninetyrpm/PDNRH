@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { createSession, formatElapsed, nextMilestone, type SessionSnapshot, type LossReason } from '@/lib/session';
 import { BASE_MUTATION, validateMutation, type PageMutation } from '@/lib/mutation';
 import { validRemoteSession, telemetryPayload, type RemoteSession } from '@/lib/telemetry';
+import { makeBehaviorCollector } from '@/lib/behavior';
 
 const THRESHOLDS = [60,180,600,1800,3600];
 const STORAGE_KEY = 'pdnrh-active-round';
@@ -23,6 +24,7 @@ export default function Home() {
   const [fallbackReason,setFallbackReason] = useState<string|null>(null);
   const [assignment,setAssignment] = useState<string>('pending');
   const exposureOrdinalRef = useRef(0);
+  const behaviorRef = useRef<ReturnType<typeof makeBehaviorCollector>|null>(null);
   const [telemetryStatus,setTelemetryStatus] = useState<'pending'|'connected'|'offline'>('pending');
   const sessionRef = useRef<ReturnType<typeof createSession>|null>(null);
   const remoteRef = useRef<RemoteSession|null>(null);
@@ -41,6 +43,8 @@ export default function Home() {
 
   useEffect(() => {
     const session = createSession();
+    const behavior=makeBehaviorCollector(window.innerWidth);
+    behaviorRef.current=behavior;
     sessionRef.current = session;
     try {setPreviousReload(sessionStorage.getItem(STORAGE_KEY)==='playing');sessionStorage.removeItem(STORAGE_KEY);} catch {}
     setSnapshot(session.snapshot()); setReady(true);
@@ -48,7 +52,7 @@ export default function Home() {
     const send=(s:SessionSnapshot, reason?:LossReason)=>{
       const remote=remoteRef.current;
       if(!remote)return;
-      const payload=JSON.stringify(telemetryPayload(s,++sequenceRef.current,reason));
+      const payload=JSON.stringify(telemetryPayload(s,++sequenceRef.current,reason,behavior.snapshot()));
       // keepalive allows terminal delivery during blur, navigation, or pagehide.
       void fetch(`/api/sessions/${remote.id}/events`,{
         method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${remote.credential}`},
@@ -94,8 +98,9 @@ export default function Home() {
     const onBlur=()=>lose('blur');
     const onVisibility=()=>{if(document.hidden)lose('hidden');};
     const onPageHide=()=>lose('pagehide');
-    const onClick=()=>{session.record('click');update();};
-    const onScroll=()=>{session.record('scroll');update();};
+    const onClick=(e:MouseEvent)=>{if((e.target as Element|null)?.closest?.('[data-pdnrh-concede]'))behavior.concedeClick();session.record('click');update();};
+    const onScroll=()=>{behavior.scroll(window.scrollY);session.record('scroll');update();};
+    const onPointer=(event:PointerEvent)=>{if(session.snapshot().phase!=='playing')return;const rect=document.querySelector('[data-pdnrh-concede]')?.getBoundingClientRect();behavior.pointer(event.clientX,event.clientY,rect);};
     const onActivity=()=>session.record('activity');
 
     async function tick() {
@@ -113,7 +118,7 @@ export default function Home() {
         const response=await fetch('/api/mutate',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${remote.credential}`,'X-Session-ID':remote.id},
           body:JSON.stringify({elapsedSeconds:Math.floor(s.elapsedMs/1000),clicks:s.clicks,scrolls:s.scrolls,
           idleSeconds:Math.floor(s.idleMs/1000),step:stepRef.current,
-          previousStrategies:strategiesRef.current.slice(-4),previousHeadline:mutationRef.current.headline})});
+          behavior:behavior.snapshot(),previousStrategies:strategiesRef.current.slice(-4),previousHeadline:mutationRef.current.headline})});
         if(!response.ok)throw new Error('Mutation request failed');
         const data=await response.json();
         const proposed=validateMutation(data.mutation);
@@ -136,6 +141,7 @@ export default function Home() {
     document.addEventListener('click',onClick);
     window.addEventListener('scroll',onScroll,{passive:true});
     document.addEventListener('pointermove',onActivity,{passive:true});
+    document.addEventListener('pointermove',onPointer,{passive:true});
     document.addEventListener('keydown',onActivity);
     return ()=>{
       clearInterval(interval);
@@ -145,6 +151,7 @@ export default function Home() {
       document.removeEventListener('click',onClick);
       window.removeEventListener('scroll',onScroll);
       document.removeEventListener('pointermove',onActivity);
+      document.removeEventListener('pointermove',onPointer);
       document.removeEventListener('keydown',onActivity);
       sessionRef.current=null;
     };
@@ -197,8 +204,8 @@ export default function Home() {
       <p className="muted">{snapshot.phase==='lost'?'Final survival time':upcoming?`Next milestone: ${formatElapsed(upcoming.target*1000)} · ${milestoneCount} reached`:'Every milestone reached. Still here.'}</p>
     </section>
     <footer className="footer">
-      <p className="muted">{playing?`Assignment ${assignment} · ${source==='model'?'AI-generated':source==='fallback'?`scripted fallback (${fallbackReason??'unknown'})`:'first change pending'} · telemetry ${telemetryStatus} · focus loss ends the round.`:'Focus loss ends a round. Session outcomes are recorded anonymously when telemetry is available.'}</p>
-      {playing&&<button type="button" onClick={concede}>{mutation.actionLabel}</button>}
+      <p className="muted">{playing?`Assignment ${assignment} · ${source==='model'?'AI-generated':source==='fallback'?`scripted fallback (${fallbackReason??'unknown'})`:'first change pending'} · telemetry ${telemetryStatus} · focus loss ends the round.`:'Focus loss ends a round. During play, aggregate pointer movement, button approaches, scrolling and activity are analyzed without storing cursor positions, typed content, or identifying information.'}</p>
+      {playing&&<button type="button" data-pdnrh-concede onClick={concede}>{mutation.actionLabel}</button>}
     </footer>
   </main>;
 }
