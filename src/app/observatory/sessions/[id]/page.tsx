@@ -4,6 +4,7 @@ import { observatoryAuthorized } from '@/lib/observatory-auth';
 import Unlock from '../../unlock';
 import Replay from './replay';
 import { validateMutation } from '@/lib/mutation';
+import {validateStrategyState} from '@/lib/strategic-planner';
 import '../../observatory.css';
 
 export const dynamic='force-dynamic';
@@ -12,22 +13,24 @@ const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]
 function stamp(v:unknown){return v?new Date(String(v)).toISOString().replace('T',' ').slice(0,23)+' UTC':'—';}
 function text(v:unknown){return v==null?'—':String(v);}
 function secs(v:unknown){return v==null?'—':(Number(v)/1000).toFixed(1)+'s';}
-type Mutation={headline?:unknown;message?:unknown;aside?:unknown;tone?:unknown;layout?:unknown;surface?:unknown;actionLabel?:unknown;strategy?:unknown;hypothesis?:unknown;expectedReaction?:unknown;experiment?:unknown};
+type Mutation={headline?:unknown;message?:unknown;aside?:unknown;tone?:unknown;layout?:unknown;surface?:unknown;actionLabel?:unknown;strategy?:unknown;hypothesis?:unknown;expectedReaction?:unknown;experiment?:unknown;plan?:unknown};
 export default async function SessionInspector({params}:{params:Promise<{id:string}>}){
   if(!await observatoryAuthorized())return <Unlock/>;
   const {id}=await params;
   if(!uuid.test(id))notFound();
   const sql=db();
-  const [sessions,exposures,events,outcomes]=await Promise.all([
+  const [sessions,exposures,events,outcomes,strategyRows]=await Promise.all([
     sql`SELECT id::text,assignment,tactic_family,tactic_policy,engine_version,status,loss_reason,exit_channel,elapsed_ms,started_at,ended_at,last_seen_at FROM sessions WHERE id=${id}`,
     sql`SELECT e.ordinal,e.source,e.displayed_at,e.ended_at,e.mutation,t.strategy_family,t.strategy_version
       FROM exposures e LEFT JOIN tactics t ON t.id=e.tactic_id
       WHERE e.session_id=${id} ORDER BY e.ordinal LIMIT 1000`,
     sql`SELECT event_key,type,occurred_at,payload FROM events WHERE session_id=${id} ORDER BY occurred_at,event_key LIMIT 1000`,
-    sql`SELECT classification,observed_reason,evidence FROM outcomes WHERE session_id=${id} LIMIT 1`
+    sql`SELECT classification,observed_reason,evidence FROM outcomes WHERE session_id=${id} LIMIT 1`,
+    sql`SELECT revision,state,updated_at FROM session_strategy_state WHERE session_id=${id} LIMIT 1`
   ]);
   if(!sessions.length)notFound();
   const s=sessions[0];
+  const strategy=strategyRows.length?validateStrategyState(strategyRows[0].state):null;
   return <main className="obs"><header className="obs-head"><span className="obs-kicker">PDNRH / SESSION INSPECTOR</span><a href="/observatory">BACK TO OBSERVATORY</a></header>
     <p className="obs-kicker">EXP 001 / READ ONLY</p><h1>SESSION.</h1><p className="obs-session-id">{id}</p>
     <div className="obs-detail-summary">
@@ -35,6 +38,18 @@ export default async function SessionInspector({params}:{params:Promise<{id:stri
       <div><span>STATUS</span><strong>{text(s.status)} / {text(s.loss_reason)}{s.exit_channel?' / '+String(s.exit_channel):''}</strong></div><div><span>SURVIVAL</span><strong>{secs(s.elapsed_ms)}</strong></div>
       <div><span>STARTED</span><strong>{stamp(s.started_at)}</strong></div><div><span>ENDED</span><strong>{stamp(s.ended_at)}</strong></div>
     </div>
+    <section><h2>ADVERSARY STRATEGIC STATE</h2>
+      {strategy?<div className="obs-exposure">
+        <p className="obs-note">State revision {String(strategyRows[0].revision)} · last updated {stamp(strategyRows[0].updated_at)}</p>
+        <div className="obs-tags"><span>APPROACH {strategy.approach}</span>
+          <span>STALL CYCLES {strategy.stalledCycles}</span>
+          <span>PIVOTS {strategy.pivots}</span>
+          <span>EXIT-PROXIMITY PROXIES {strategy.exitSignalCount}</span>
+          <span>INTERACTION CLICKS {strategy.engagementCount}</span></div>
+        <p className="obs-note">Proxies are first-party indicators, not proof that the participant intended to leave or that the adversary was effective.</p>
+        <pre className="obs-evidence">{JSON.stringify(strategy.history,null,2)}</pre>
+      </div>:<p className="obs-note">No persistent strategic plan was recorded for this session.</p>}
+    </section>
     <section><h2>VISUAL SESSION REPLAY</h2><Replay startedAt={new Date(String(s.started_at)).getTime()} endedAt={s.ended_at?new Date(String(s.ended_at)).getTime():null} frames={exposures.flatMap(e=>{const mutation=validateMutation(e.mutation);return mutation?[{ordinal:Number(e.ordinal),source:String(e.source),start:new Date(String(e.displayed_at)).getTime(),end:e.ended_at?new Date(String(e.ended_at)).getTime():null,mutation}]:[];})}/></section>
     <section><h2>EXPOSURE TIMELINE / {exposures.length} RECORDS</h2>
       <p className="obs-note">Times are server-observed; they are not precise proof of when pixels appeared in the browser. Each card contains the exact recorded mutation payload.</p>
@@ -43,6 +58,7 @@ export default async function SessionInspector({params}:{params:Promise<{id:stri
           <p className="obs-note">{stamp(e.displayed_at)} → {stamp(e.ended_at)}</p>
           <h3>{text(m.headline)}</h3><p>{text(m.message)}</p><p className="obs-aside">{text(m.aside)}</p>
           {typeof m.hypothesis==='string'&&<p className="obs-note"><strong>BEHAVIORAL HYPOTHESIS</strong> · {text(m.hypothesis)}</p>}{typeof m.expectedReaction==='string'&&<p className="obs-note"><strong>EXPECTED REACTION</strong> · {text(m.expectedReaction)}</p>}
+          {typeof m.plan==='object'&&m.plan!==null&&<p className="obs-note"><strong>ADVERSARY PLAN</strong> · {JSON.stringify(m.plan)}</p>}
           {typeof m.experiment==='object'&&m.experiment!==null&&<p className="obs-note"><strong>ELEMENT TEST</strong> · {JSON.stringify(m.experiment)}</p>}
           <div className="obs-tags"><span>TONE {text(m.tone)}</span><span>LAYOUT {text(m.layout)}</span><span>SURFACE {text(m.surface)}</span><span>STRATEGY {text(m.strategy)}</span><span>BUTTON {text(m.actionLabel)}</span></div>
         </article>;})}
