@@ -166,5 +166,6 @@ test('PD12A: renderer hardcodes the single URL and does not render arbitrary mod
   assert.match(renderer,/href=\{DEPARTURE_URL\}/);
   assert.match(renderer,/onNavigate\?\.\(\)/);
   assert.doesNotMatch(renderer,/href=\{block\./);
-  assert.match(renderer,/DEPARTURE_LABEL/);
+  assert.doesNotMatch(renderer,/DEPARTURE_LABEL|pd-outbound-destination/);
+  assert.match(renderer,/href=\{DEPARTURE_URL\}/);
 });

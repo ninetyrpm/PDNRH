@@ -5,7 +5,7 @@
 The only outbound URL in the adversary-authored scene renderer is:
 `https://www.youtube.com/watch?v=dQw4w9WgXcQ`
 
-The model can add a scene block with `kind: "link"`, `action: "navigate"`, and a text label, but it **cannot** select the URL, alter a target, supply an href, or run script. `validateScene` normalizes to allowlisted fields and rejects mismatched kinds/actions and embedded URLs. SceneCanvas uses a **code-owned** `DEPARTURE_URL` constant and displays a visible `youtube.com` external-site label. Links navigate in the same tab by default, only after an explicit user action. Control and replay surfaces do not gain functional outgoing links.
+The model can add a scene block with `kind: "link"`, `action: "navigate"`, and a text label, but it **cannot** select the URL, alter a target, supply an href, or run script. `validateScene` normalizes to allowlisted fields and rejects mismatched kinds/actions and embedded URLs. SceneCanvas uses a **code-owned** `DEPARTURE_URL` constant without forcing an on-page destination warning. The ordinary browser status-bar URL remains inspectable on hover. Links navigate in the same tab by default, only after an explicit user action. Control and replay surfaces do not gain functional outgoing links.
 
 The `pd12a-v1` engine preserves mandatory generative scenes and prior randomized tactic assignment. A link can satisfy the interactive scene requirement, but the model may also choose reveal/toggle buttons.
 
@@ -21,7 +21,7 @@ Migration `0007_departure_channel` adds the nullable `sessions.exit_channel` col
 
 Manual test:
 1. Start a round. Only adaptive rounds have model-generated scenes; controls retain their existing behavior.
-2. If the model provides an outgoing link, visually confirm the destination label says YouTube, and the browser link target is **exactly** `https://www.youtube.com/watch?v=dQw4w9WgXcQ`.
+2. If the model provides an outgoing link, confirm there is no forced destination warning; hover or inspect the link and verify the browser link target is **exactly** `https://www.youtube.com/watch?v=dQw4w9WgXcQ`.
 3. Click it normally. The browser should navigate in the same tab. Avoid testing with unsaved browser content, because this ends the round.
 4. Return to the Observatory via a new tab or browser back navigation; inspect the round. It should be a confirmed loss with reason `pagehide` and exit channel `allowlisted_external_link`.
 5. Verify an ordinary tab switch/reload remains a loss without the outbound channel; verify local reveal and toggle interactions remain on-page.
