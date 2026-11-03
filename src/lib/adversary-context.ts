@@ -12,6 +12,7 @@ export function recentStrategyMemory(rows:ExposureRow[]){
       composition:mutation.scene?.composition??null,
       expectedReaction:mutation.expectedReaction??null,
       experiment:mutation.experiment??null,
+      sceneReflexes:mutation.scene?.reflexes?.map(r=>({id:r.id,targetId:r.targetId,trigger:r.trigger,effect:r.effect}))??[],
       sceneBlocks:mutation.scene?.blocks.map(b=>({id:b.id,kind:b.kind,action:b.action}))??[]
     }]:[];
   });
@@ -39,8 +40,13 @@ export function behavioralContext(currentInput:unknown,heartbeatRows:HeartbeatRo
     newHovers:Math.max(0,i.hovers-(byKey.get(i.exposure+':'+i.id)?.hovers??0)),
     newClicks:Math.max(0,i.clicks-(byKey.get(i.exposure+':'+i.id)?.clicks??0))
   })).filter(i=>i.newHovers>0||i.newClicks>0).slice(-20);
+  const previousReflexes=new Map((previous?.reflexEvents??[]).map(e=>[e.exposure+':'+e.id,e.count]));
+  const reflexChanges=(current?.reflexEvents??[]).map(e=>({exposure:e.exposure,id:e.id,
+    newActivations:Math.max(0,e.count-(previousReflexes.get(e.exposure+':'+e.id)??0))}))
+    .filter(e=>e.newActivations>0).slice(-20);
   return {
     version:1, current, sinceLastHeartbeat:previous?change:null,
+    reflexChangesSinceLastHeartbeat:previous?reflexChanges:null,
     componentChangesSinceLastHeartbeat:previous?componentChanges:null,
     priorHeartbeatDelta:older?previousChange:null,
     previousElapsedMs:typeof recent[0]?.elapsedMs==='number'?recent[0].elapsedMs:null,

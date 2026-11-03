@@ -7,9 +7,14 @@ export type SceneBlock={
   id:string;kind:SceneKind;text:string;detail:string;align:'left'|'center'|'right';
   size:'sm'|'md'|'lg'|'xl';effect:'none'|'blink'|'float'|'pulse';action:SceneAction;
 };
+export type SceneReflex={
+  id:string;targetId:string;trigger:'hover'|'click'|'near'|'idle';
+  threshold:number;effect:'reveal'|'conceal'|'highlight'|'shift'|'replace';text:string;
+};
 export type PageScene={
   version:1;composition:'column'|'grid'|'scatter'|'poster'|'terminal'|'mosaic';
   accent:'neutral'|'ember'|'lime'|'ice';blocks:SceneBlock[];
+  reflexes?:SceneReflex[];
 };
 const allowed={
   kind:['heading','paragraph','label','rule','button','panel','glyph','meter','marquee','void','link'],
@@ -46,8 +51,29 @@ export function validateScene(value:unknown):PageScene|null{
       align:align as SceneBlock['align'],size:size as SceneBlock['size'],
       effect:effect as SceneBlock['effect'],action:action as SceneAction});
   }
+  let reflexes:SceneReflex[]|undefined;
+  if(scene.reflexes!==undefined){
+    if(!Array.isArray(scene.reflexes)||scene.reflexes.length>8)return null;
+    reflexes=[];const ruleIds=new Set<string>();
+    for(const raw of scene.reflexes){
+      if(!raw||typeof raw!=='object'||Array.isArray(raw))return null;
+      const r=raw as Record<string,unknown>;
+      if(typeof r.id!=='string'||! /^[a-z][a-z0-9_-]{0,31}$/.test(r.id)||ruleIds.has(r.id)||
+        typeof r.targetId!=='string'||!ids.has(r.targetId)||
+        !['hover','click','near','idle'].includes(String(r.trigger))||
+        !['reveal','conceal','highlight','shift','replace'].includes(String(r.effect))||
+        typeof r.threshold!=='number'||!Number.isInteger(r.threshold)||
+        r.threshold<1||r.threshold>(r.trigger==='idle'?30:6))return null;
+      const message=safeText(r.text??'',180);
+      if(message===null||(r.effect==='replace'&&!message))return null;
+      ruleIds.add(r.id);
+      reflexes.push({id:r.id,targetId:r.targetId,trigger:r.trigger as SceneReflex['trigger'],
+        threshold:r.threshold,effect:r.effect as SceneReflex['effect'],text:message});
+    }
+  }
   return {version:1,composition:scene.composition as PageScene['composition'],
-    accent:scene.accent as PageScene['accent'],blocks};
+    accent:scene.accent as PageScene['accent'],blocks,
+    ...(reflexes?{reflexes}:{})};
 }
 
 /** PD11E: every model-authored adaptive output must transform the structure.
