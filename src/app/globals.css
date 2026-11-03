@@ -52,3 +52,10 @@
 .pd-outbound-link:focus-visible{outline:3px solid currentColor;outline-offset:4px}
 .pd-outbound-inactive{opacity:.6;cursor:default}
 .pd-outbound-destination{font:11px/1.4 monospace;color:var(--muted);letter-spacing:.035em;text-align:center}
+
+/* PD12C — bounded local reflexes; only the generated scene may react. */
+.pd-reflex-highlight{outline:3px solid var(--pd-accent);outline-offset:6px;filter:brightness(1.25)}
+.pd-reflex-conceal{opacity:.08;transition:opacity .25s ease}
+.pd-reflex-shift{translate:clamp(18px,5vw,55px) 0;transition:translate .3s ease}
+.pd-reflex-replace{border-left:3px solid var(--pd-accent);padding-left:14px}
+@media(prefers-reduced-motion:reduce){.pd-reflex-shift{translate:none;outline:2px dashed var(--pd-accent)}}
