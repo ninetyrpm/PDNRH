@@ -114,13 +114,13 @@ export async function POST(request: NextRequest) {
   };
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    const timeout = setTimeout(() => controller.abort(), engineVersion==='pd12d-v1'?15000:12000);
     let response: Response;
     try {
       response = await fetch('https://api.openai.com/v1/chat/completions', {
         method:'POST',signal:controller.signal,
         headers:{'Authorization':`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},
-        body:JSON.stringify({model:process.env.OPENAI_MODEL || 'gpt-4.1-mini',max_completion_tokens:3300,response_format:{type:'json_object'},
+        body:JSON.stringify({model:process.env.OPENAI_MODEL || 'gpt-4.1-mini',max_completion_tokens:engineVersion==='pd12d-v1'?4200:3300,response_format:{type:'json_object'},
           messages:[{role:'system',content:SYSTEM+(creative?'\n'+creativeInstruction:'')+(patchInstruction?'\n'+patchInstruction:'')+(reflexInstruction?'\n'+reflexInstruction:'')+(strategyInstruction?'\n'+strategyInstruction:'')},{role:'user',content:JSON.stringify(input)}]})
       });
     } finally { clearTimeout(timeout); }
@@ -153,6 +153,30 @@ export async function POST(request: NextRequest) {
       (['pd12b-v1','pd12c-v1','pd12d-v1'].includes(engineVersion)&&mutation.scenePatch ?
         JSON.stringify(mutation.scene)===JSON.stringify(previousScene) :
         !isStructurallyNovel(mutation,memory.at(-1)))))) { console.error('[pdnrh:mutation] invalid_model_output_or_missing_scene'); return NextResponse.json({mutation:fallback,source:'fallback',fallbackReason:'invalid_model_output'},{headers:{'Cache-Control':'no-store'}}); }
+    if(engineVersion==='pd12d-v1'){
+      if(!mutation.plan||!directive|| (directive.pivotRequired&&
+        mutation.plan.approach===directive.avoidApproach)){
+        console.error('[pdnrh:strategy] missing_plan_or_required_pivot');
+        return NextResponse.json({mutation:fallback,source:'fallback',
+          fallbackReason:'invalid_strategy_plan'},{headers:{'Cache-Control':'no-store'}});
+      }
+      const nextState=commitStrategy(previousStrategy,mutation.plan,directive);
+      try{
+        const sql=db();
+        const stored=await sql`INSERT INTO session_strategy_state(session_id,revision,state)
+          SELECT ${sessionId}::uuid,${nextState.cycle},${JSON.stringify(nextState)}::jsonb
+          WHERE EXISTS(SELECT 1 FROM sessions WHERE id=${sessionId} AND status='active')
+          ON CONFLICT(session_id) DO UPDATE SET
+            revision=EXCLUDED.revision,state=EXCLUDED.state,updated_at=now()
+          WHERE session_strategy_state.revision<EXCLUDED.revision RETURNING revision`;
+        if(!stored.length)return NextResponse.json({mutation:fallback,source:'fallback',
+          fallbackReason:'strategy_session_ended'},{headers:{'Cache-Control':'no-store'}});
+      }catch{
+        console.error('[pdnrh:strategy] persistence_unavailable');
+        return NextResponse.json({mutation:fallback,source:'fallback',
+          fallbackReason:'strategy_persistence_unavailable'},{headers:{'Cache-Control':'no-store'}});
+      }
+    }
     return NextResponse.json({mutation,source:'model'},{headers:{'Cache-Control':'no-store'}});
   } catch (error) {
     const reason = error instanceof Error && error.name === 'AbortError' ? 'provider_timeout' : 'provider_exception';
