@@ -1,8 +1,8 @@
 import { validateBehavior, type BehaviorSummary } from './behavior';
 import { validateMutation } from './mutation';
 
-type ExposureRow={ordinal:unknown;mutation:unknown};
-type HeartbeatRow={payload:unknown};
+type ExposureRow=Record<string,unknown>;
+type HeartbeatRow=Record<string,unknown>;
 export function recentStrategyMemory(rows:ExposureRow[]){
   return rows.slice(0,4).reverse().flatMap(row=>{
     const mutation=validateMutation(row.mutation);
