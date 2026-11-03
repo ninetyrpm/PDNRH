@@ -14,8 +14,7 @@ const REASONS: Record<LossReason,string> = {
   hidden:'You hid this page. The machine wins.',
   pagehide:'You navigated away or reloaded. The machine wins.',
   reload:'You reloaded an active round. The machine wins.',
-  concede:'You conceded. The machine wins.',
-  external_link:'You followed the departure link. The machine wins.'
+  concede:'You conceded. The machine wins.'
 };
 export default function Home() {
   const [snapshot,setSnapshot] = useState<SessionSnapshot>(INITIAL);
@@ -42,6 +41,7 @@ export default function Home() {
   const exposeRef = useRef<(ordinal:number, value:PageMutation, source:string)=>void>(()=>{});
   const sendRef = useRef<(s:SessionSnapshot, reason?:LossReason)=>void>(()=>{});
   const leaveRef = useRef<()=>void>(()=>{});
+  const outboundRef = useRef(false);
   const startRemoteRef = useRef<()=>void>(()=>{});
 
   useEffect(() => {
@@ -55,7 +55,10 @@ export default function Home() {
     const send=(s:SessionSnapshot, reason?:LossReason)=>{
       const remote=remoteRef.current;
       if(!remote)return;
-      const payload=JSON.stringify(telemetryPayload(s,++sequenceRef.current,reason,behavior.snapshot()));
+      const payload=JSON.stringify({
+        ...telemetryPayload(s,++sequenceRef.current,reason,behavior.snapshot()),
+        ...(reason==='pagehide'&&outboundRef.current?{departureChannel:'allowlisted_external_link'}:{})
+      });
       // keepalive allows terminal delivery during blur, navigation, or pagehide.
       void fetch(`/api/sessions/${remote.id}/events`,{
         method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${remote.credential}`},
@@ -98,7 +101,7 @@ export default function Home() {
       update();
       send(session.snapshot(),reason);
     };
-    leaveRef.current=()=>lose('external_link');
+    leaveRef.current=()=>{outboundRef.current=true;lose('pagehide');};
     const onBlur=()=>lose('blur');
     const onVisibility=()=>{if(document.hidden)lose('hidden');};
     const onPageHide=()=>lose('pagehide');
