@@ -33,7 +33,7 @@ export async function openExperimentSession() {
     {weights:Array(3).fill(1/3) as number[],policy:'uniform-v1',eligible:false};
   const tactic = assignment==='adaptive' ? selectTactic(id,selection.weights) : null;
   await sql`INSERT INTO sessions(id,credential_hash,assignment,tactic_family,tactic_policy,engine_version)
-    VALUES(${id},${hashCredential(credential)},${assignment},${tactic?.family ?? null},${tactic ? selection.policy+'-governance-r'+revision : 'control-v1'},'pd12a-v1')`;
+    VALUES(${id},${hashCredential(credential)},${assignment},${tactic?.family ?? null},${tactic ? selection.policy+'-governance-r'+revision : 'control-v1'},'pd12b-v1')`;
   // Create the baseline exposure before returning credentials, so a rapid exit
   // cannot race its insertion. Retried clients cannot create duplicate ordinals.
   await sql`INSERT INTO exposures(session_id,ordinal,mutation,source)
