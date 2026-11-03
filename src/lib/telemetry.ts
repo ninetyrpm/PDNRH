@@ -1,4 +1,5 @@
 import type { SessionSnapshot, LossReason } from './session';
+import type { BehaviorSummary } from './behavior';
 
 export interface RemoteSession { id: string; credential: string; assignment: string }
 export function validRemoteSession(value: unknown): value is RemoteSession {
@@ -8,7 +9,7 @@ export function validRemoteSession(value: unknown): value is RemoteSession {
     typeof o.credential === 'string' && /^[a-zA-Z0-9_-]{43}$/.test(o.credential) &&
     ['adaptive','static_control','baseline_control'].includes(String(o.assignment));
 }
-export function telemetryPayload(s: SessionSnapshot, sequence: number, reason?: LossReason) {
+export function telemetryPayload(s: SessionSnapshot, sequence: number, reason?: LossReason, behavior?: BehaviorSummary) {
   return { type: reason ? 'loss' : 'heartbeat', sequence, elapsedMs: s.elapsedMs,
-    clicks: s.clicks, scrolls: s.scrolls, idleMs: s.idleMs, ...(reason ? { reason } : {}) };
+    clicks: s.clicks, scrolls: s.scrolls, idleMs: s.idleMs, ...(behavior ? {behavior} : {}), ...(reason ? { reason } : {}) };
 }
