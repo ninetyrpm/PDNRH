@@ -4,7 +4,7 @@ import { isCreativeScene } from './scene';
 /** PD11E acceptance gate: no adaptive output can silently downgrade to typography-only. */
 export function validateCreativeMutation(value:PageMutation|null):value is PageMutation {
   return !!value && isCreativeScene(value.scene) &&
-    !!value.hypothesis && !!value.expectedReaction;
+    !!value.hypothesis && !!value.expectedReaction && !!value.experiment;
 }
 
 /** Explicitly attributed, structurally valid fallback, never mislabeled as model output. */
@@ -24,6 +24,7 @@ export function creativeFallback(step:number):PageMutation {
     nextDelaySeconds:30,
     hypothesis:'Model scene unavailable; no behavioral inference made.',
     expectedReaction:'Observe any on-page interaction without attributing intent.',
+    experiment:{targetId:'choice',event:'click',minimum:1},
     scene:{
       version:1,composition:(['poster','terminal','mosaic'] as const)[n],
       accent:(['ember','ice','lime'] as const)[n],
@@ -35,4 +36,14 @@ export function creativeFallback(step:number):PageMutation {
       ]
     }
   };
+}
+
+export function isStructurallyNovel(
+  candidate:PageMutation,
+  previous:{composition:string|null;sceneBlocks:{id:string;kind:string;action:string}[]} | undefined
+):boolean{
+  if(!previous?.composition||!candidate.scene)return true;
+  const next=candidate.scene.blocks.map(b=>b.kind+':'+b.action+':'+b.id).join('|');
+  const before=previous.sceneBlocks.map(b=>b.kind+':'+b.action+':'+b.id).join('|');
+  return candidate.scene.composition!==previous.composition || next!==before;
 }
