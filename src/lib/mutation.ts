@@ -1,3 +1,4 @@
+import { validateScene, type PageScene } from './scene';
 /** The only page vocabulary the model may control. */
 export type Tone = 'quiet' | 'direct' | 'absurd' | 'clinical';
 export type Layout = 'center' | 'left' | 'split';
@@ -12,6 +13,7 @@ export interface PageMutation {
   actionLabel: string;
   strategy: string;
   nextDelaySeconds: number;
+  scene?: PageScene;
 }
 export const BASE_MUTATION: PageMutation = {
   headline: 'PLEASE DO NOT REMAIN HERE.',
@@ -37,9 +39,11 @@ export function validateMutation(value: unknown): PageMutation | null {
       !surfaces.includes(v.surface as Surface) ||
       typeof v.nextDelaySeconds !== 'number' || !Number.isInteger(v.nextDelaySeconds) ||
       v.nextDelaySeconds < 15 || v.nextDelaySeconds > 90) return null;
+  const scene=v.scene===undefined?undefined:validateScene(v.scene);
+  if(v.scene!==undefined&&!scene)return null;
   return { headline, message, aside, actionLabel, strategy,
     tone: v.tone as Tone, layout: v.layout as Layout, surface: v.surface as Surface,
-    nextDelaySeconds: v.nextDelaySeconds };
+    nextDelaySeconds: v.nextDelaySeconds, ...(scene?{scene}: {}) };
 }
 const SCRIPTED: PageMutation[] = [
   {headline:'YOU CAN GO NOW.',message:'That was the entire experience. There is nothing more to discover.',aside:'No second act is scheduled.',tone:'direct',layout:'center',surface:'paper',actionLabel:'END THIS',strategy:'closure',nextDelaySeconds:32},
