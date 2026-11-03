@@ -52,15 +52,18 @@ export async function POST(request: NextRequest) {
   let memory:ReturnType<typeof recentStrategyMemory>=[];
   let previousScene:NonNullable<ReturnType<typeof validateMutation>>['scene']|undefined;
   let behavior:ReturnType<typeof behavioralContext>;
+  let previousStrategy:StrategyState|null=null;
   try {
     const sql=db();
-    const [exposures,heartbeats]=await Promise.all([
+    const [exposures,heartbeats,strategyRows]=await Promise.all([
       sql`SELECT ordinal,mutation FROM exposures WHERE session_id=${sessionId} AND ordinal>0 ORDER BY ordinal DESC LIMIT 8`,
-      sql`SELECT payload FROM events WHERE session_id=${sessionId} AND type='heartbeat' ORDER BY occurred_at DESC LIMIT 2`
+      sql`SELECT payload FROM events WHERE session_id=${sessionId} AND type='heartbeat' ORDER BY occurred_at DESC LIMIT 2`,
+      sql`SELECT state FROM session_strategy_state WHERE session_id=${sessionId}`
     ]);
     memory=recentStrategyMemory(exposures);
     previousScene=exposures.map(row=>validateMutation(row.mutation)?.scene).find(Boolean);
     behavior=behavioralContext(body.behavior,heartbeats);
+    previousStrategy=validateStrategyState(strategyRows[0]?.state);
   } catch {
     return NextResponse.json({mutation:fallback,source:'fallback',fallbackReason:'context_unavailable'},
       {headers:{'Cache-Control':'no-store'}});
@@ -70,6 +73,12 @@ export async function POST(request: NextRequest) {
   const reflexInstruction=['pd12c-v1','pd12d-v1'].includes(engineVersion)?
     'PD12C LOCAL REFLEXES: Your final scene MUST contain at least one safe reactive rule in scene.reflexes. Each rule is {id,targetId,trigger,threshold,effect,text}. Triggers: hover, click, near (pointer approaches within 72 px), idle (seconds without on-page activity). threshold 1-6 for hover/click/near or 1-30 seconds for idle. Effects: reveal, conceal, highlight, shift, replace. For replace, text is required, max 180 characters. Refer only to existing block IDs; max 8 rules, one shot per mutation exposure. This runs immediately in the browser with no new LLM request and no capability to navigate, concede, read private data or manipulate protected game chrome. Use a rule to acknowledge an actually measured on-page action in context, not to make claims about private surveillance. When patching you may include reflexes in scenePatch to replace current rules. Reference the latest reflex activation counts in behavioralObservation when evaluating what worked.' :null;
   const creativeInstruction=creative?`PD11E / STRUCTURAL AGENCY. Every response MUST include either a complete scene (version 1), or for PD12B a scenePatch (version 1) against the current world. The resulting world must have at least THREE blocks, including a reveal/toggle button OR departure link and a visual glyph, void, meter, or rule. For full replacements, change the structure. For patches, an intentional change to existing elements is allowed, including movement, content, and styling; avoid no-op mutations. The treatment family controls the persuasive idea, NOT typography or artistic style. Even closure_frame may use dramatic deletion, voids, progress-shaped art, staggered panels, an empty terminal, or a scattered constellation. Alternate composition poster, mosaic, terminal, grid, scatter; avoid repeating the previous composition. Available scene kinds: heading, paragraph, label, rule, button, panel, glyph, meter, marquee, void, link. Available compositions: column, grid, scatter, poster, terminal, mosaic. All blocks require unique id, kind, text, detail (may be empty), align (left/center/right), size (sm/md/lg/xl), effect (none/blink/float/pulse), action (none/reveal/toggle/concede/navigate). Buttons may use reveal/toggle/concede; only kind:"link" may use action:"navigate". A link is rendered using the server-controlled ONLY destination https://www.youtube.com/watch?v=dQw4w9WgXcQ; NEVER invent destinations, URLs, link targets, or redirects. You control the visible link copy. Make the copy naturally relevant to the current creative scene; avoid generic warnings, hostname labels, and repetitive 'leave for YouTube' phrasing. Do not assert a false destination or pretend to represent a trusted service, but you need not announce the destination in the rendered copy. The ordinary native browser link remains inspectable. Prefer proposing the departure link when it serves the assigned tactic, but keep it optional so the adversary can evolve its approach. Use interactions to run a test: choose a concrete component ID and predict whether the visitor will hover or click it. Interpret previous component click/hover counts as on-page observations, not personal knowledge. Include short factual hypothesis and expectedReaction fields. You MUST include experiment:{targetId,event,minimum}, where targetId is an ID of a block in YOUR new scene, event is hover or click, and minimum is an integer from 1 to 10. The purpose is to test whether this on-page stimulus receives actual attention. Keep entire experiment rules, navigation and focus behavior untouched. Emit exactly one JSON object containing headline, message, aside, tone, layout, surface, actionLabel, strategy, nextDelaySeconds, hypothesis, expectedReaction, scene.`:null;
+  const linkTargets=memory.flatMap(m=>m.sceneBlocks.filter(b=>b.kind==='link')
+    .map(b=>({exposure:m.ordinal,id:b.id})));
+  const directive:StrategicDirective|null=engineVersion==='pd12d-v1'?
+    deriveStrategicDirective(previousStrategy,behavior.current,linkTargets):null;
+  const strategyInstruction=directive?
+    'PD12D STRATEGIC PLANNER. Every response MUST include plan={version:1,approach,exitMechanism,expectedExitSignal,thesis,assessment,changeReason}. approach must be one of curiosity, closure, subtraction, direct, disruption, alternative, negotiation. exitMechanism: concede, allowlisted_link, voluntary_focus_loss. expectedExitSignal: concede_approach, link_attention, terminal_departure. thesis <=220 characters, assessment and changeReason <=240 each. You must distinguish harmless engagement from progress toward voluntary departure: do not treat clicks on your puzzles or visual objects as wins. If strategyDirective.pivotRequired=true, ABANDON the previous approach AND its repeated motif: choose a different approach than strategyDirective.avoidApproach; describe the substantive pivot in plan.changeReason. If the user merely explores, reconsider whether novelty is making them stay. You can reduce or remove objects, offer an actual external link using the fixed allowlist, or switch to direct closure. Follow the assigned experimental tactic family as the persuasion thesis without inheriting an unproductive visual theme. Ground assessments only in first-party observations and acknowledge uncertainty. Include no fabricated claims of personal or external surveillance.' :null;
   const previousTest=memory.at(-1)?.experiment;
   const observed=previousTest?behavior.current?.sceneInteractions?.find(
     i=>i.exposure===memory.at(-1)?.ordinal&&i.id===previousTest.targetId
@@ -92,7 +101,10 @@ export async function POST(request: NextRequest) {
     creativeInstruction,
     patchInstruction,
     reflexInstruction,
-    currentWorld:previousScene?{composition:previousScene.composition,accent:previousScene.accent,blocks:previousScene.blocks}:null,
+    strategyInstruction,
+    previousStrategy,
+    strategyDirective:directive,
+    currentWorld:previousScene?{composition:previousScene.composition,accent:previousScene.accent,blocks:previousScene.blocks,reflexes:previousScene.reflexes??[]}:null,
     previousExperimentResult,
     behavioralObservation:behavior,
     recordedStrategyHistory:memory,
@@ -109,7 +121,7 @@ export async function POST(request: NextRequest) {
         method:'POST',signal:controller.signal,
         headers:{'Authorization':`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},
         body:JSON.stringify({model:process.env.OPENAI_MODEL || 'gpt-4.1-mini',max_completion_tokens:3300,response_format:{type:'json_object'},
-          messages:[{role:'system',content:SYSTEM+(creative?'\n'+creativeInstruction:'')+(patchInstruction?'\n'+patchInstruction:'')+(reflexInstruction?'\n'+reflexInstruction:'')},{role:'user',content:JSON.stringify(input)}]})
+          messages:[{role:'system',content:SYSTEM+(creative?'\n'+creativeInstruction:'')+(patchInstruction?'\n'+patchInstruction:'')+(reflexInstruction?'\n'+reflexInstruction:'')+(strategyInstruction?'\n'+strategyInstruction:'')},{role:'user',content:JSON.stringify(input)}]})
       });
     } finally { clearTimeout(timeout); }
     if (!response.ok) {
