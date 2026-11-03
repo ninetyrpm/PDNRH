@@ -4,7 +4,7 @@ import { hashCredential } from '@/lib/experiment';
 import { validateBehavior } from '@/lib/behavior';
 
 export const runtime = 'nodejs';
-const reasons = ['blur', 'hidden', 'pagehide', 'concede', 'reload'] as const;
+const reasons = ['blur', 'hidden', 'pagehide', 'concede', 'reload', 'external_link'] as const;
 type LossReason = typeof reasons[number];
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function count(n: unknown, max: number) {
