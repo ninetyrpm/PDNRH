@@ -4,6 +4,7 @@ import { createSession, formatElapsed, nextMilestone, type SessionSnapshot, type
 import { BASE_MUTATION, validateMutation, type PageMutation } from '@/lib/mutation';
 import { validRemoteSession, telemetryPayload, type RemoteSession } from '@/lib/telemetry';
 import { makeBehaviorCollector } from '@/lib/behavior';
+import SceneCanvas from './scene-canvas';
 
 const THRESHOLDS = [60,180,600,1800,3600];
 const STORAGE_KEY = 'pdnrh-active-round';
@@ -184,8 +185,8 @@ export default function Home() {
       <span className="eyebrow">SESSION {ready?snapshot.id.slice(0,8).toUpperCase():'--------'}</span></div>
     <div className={`primary ${playing?`composition-${mutation.layout} tone-${mutation.tone}`:''}`}>
       <p className="eyebrow">YOUR OBJECTIVE: REMAIN HERE.</p>
-      <h1>{playing?mutation.headline:<>PLEASE DO NOT<br/>REMAIN HERE.</>}</h1>
-      {snapshot.phase==='ready'?<div className="instructions">
+      {(!playing||!mutation.scene)&&<h1>{playing?mutation.headline:<>PLEASE DO NOT<br/>REMAIN HERE.</>}</h1>}
+      {playing&&mutation.scene?<SceneCanvas key={exposureOrdinalRef.current} scene={mutation.scene} onConcede={concede}/>:snapshot.phase==='ready'?<div className="instructions">
         {previousReload&&<p role="status">Your previous round ended when you reloaded.</p>}
         <p>The machine wins if you switch tabs, focus another window, minimize, navigate away, reload, or give up.</p>
         <p>Once you begin, keep this page focused. The clock starts when you enter.</p>
