@@ -22,7 +22,10 @@ test('PD13B every frame instance has a fresh nonce and enforced opaque origin',(
 test('PD13B focus reporting does not modify protected round-loss authority',()=>{
  assert.match(component,/Frame focus:/);
  assert.match(component,/onFocus=\{\(\)=>setFrameFocused\(true\)\}/);
- const session=fs.readFileSync(new URL('../src/app/page.tsx',import.meta.url),'utf8');
+ const session=fs.readFileSync(new URL('../src/app/legacy/page.tsx',import.meta.url),'utf8');
  assert.match(session,/const onBlur=\(\)=>lose\('blur'\)/);
  assert.doesNotMatch(session,/SandboxWorld/);
+ const pd13=fs.readFileSync(new URL('../src/app/pd13-game.tsx',import.meta.url),'utf8');
+ assert.match(pd13,/document.hasFocus\(\)/);
+ assert.match(pd13,/document.hidden/);
 });
