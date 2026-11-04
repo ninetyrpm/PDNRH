@@ -1,6 +1,7 @@
 'use client';
 import {useState} from 'react';
 import SandboxWorld from '../sandbox-world';
+import styles from './lab.module.css';
 import type {AuthoredWorld} from '@/lib/sandbox-world';
 
 const example:AuthoredWorld={
@@ -39,7 +40,7 @@ const example:AuthoredWorld={
 };
 export default function SandboxLab(){
  const [signals,setSignals]=useState<string[]>([]);
- return <main className="pd-lab">
+ return <main className={styles.pdLab}>
   <header><span>PDNRH / PD13A</span><span>ISOLATION PROTOTYPE</span></header>
   <h1>MODEL-AUTHORED ENVIRONMENT</h1>
   <p>This is a locally authored fixture, not a generated adversarial mutation.
