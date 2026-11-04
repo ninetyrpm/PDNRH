@@ -214,7 +214,7 @@ export default function PD13Game(){
     <p className="verdict">THE MACHINE WINS.</p><p>{REASONS[snapshot.lossReason??'blur']}</p>
     <button type="button" onClick={()=>window.location.reload()}>TRY AGAIN</button>
    </div>:world?<div className="pd13-stage">
-    <SandboxWorld key={ordinal} world={world} seedState={seedState}
+    <SandboxWorld key={ordinal} live world={world} seedState={seedState}
       onStatus={setFrameStatus}
       onSnapshot={value=>{snapshotRef.current=value;}}
       onSignal={event=>{
