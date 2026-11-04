@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node --test tests/pd12*.test.mjs",
+    "prebuild": "node --test tests/pd12*.test.mjs tests/pd13*.test.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
