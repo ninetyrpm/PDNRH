@@ -222,7 +222,15 @@ export default function PD13Game(){
        signalsRef.current=[...signalsRef.current,event].slice(-120);
        if(event.kind==='click'){
         sessionRef.current?.record('click');
-        setSnapshot(sessionRef.current?.snapshot()??INITIAL);
+        const current=sessionRef.current?.snapshot()??INITIAL;
+        setSnapshot(current);
+        // Repeated engagement can accelerate the next *assessment*, not count as success.
+        const clicks=signalsRef.current.filter(item=>item.kind==='click').length;
+        if(clicks>=8&&worldStartedRef.current&&
+           Date.now()-worldStartedRef.current>=25000&&
+           nextAtRef.current!==null&&!busyRef.current){
+          nextAtRef.current=Math.min(nextAtRef.current,current.elapsedMs+5000);
+        }
        }
       }}/>
    </div>:<div className="instructions"><p>Constructing the first environment.</p></div>}
