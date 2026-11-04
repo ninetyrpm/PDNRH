@@ -221,6 +221,7 @@ export default function PD13Game(){
       onSignal={event=>{
        signalsRef.current=[...signalsRef.current,event].slice(-120);
        if(event.kind==='click'){
+        behaviorRef.current?.sceneEvent(ordinalRef.current,event.id,'click');
         sessionRef.current?.record('click');
         const current=sessionRef.current?.snapshot()??INITIAL;
         setSnapshot(current);
