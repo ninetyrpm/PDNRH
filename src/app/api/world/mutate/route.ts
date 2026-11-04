@@ -12,6 +12,7 @@ export const maxDuration=60;
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const tokenRule=/^[a-zA-Z0-9_-]{43}$/;
 const noCache={'Cache-Control':'no-store'};
+const attemptCooldown=new Map<string,number>();
 
 export async function POST(request:NextRequest){
  const origin=request.headers.get('origin');
@@ -42,7 +43,7 @@ export async function POST(request:NextRequest){
   if(rows[0].engine_version!=='pd13e-v1'||rows[0].assignment!=='adaptive')
    return NextResponse.json({error:'Engine mismatch'},{status:403});
   if(rows[0].status!=='active')return NextResponse.json({error:'Session ended'},{status:409});
-  const existing=await sql`SELECT ordinal,world,plan,observations FROM pd13_world_exposures
+  const existing=await sql`SELECT ordinal,world,plan,observations,created_at FROM pd13_world_exposures
    WHERE session_id=${id} ORDER BY ordinal DESC LIMIT 8`;
   const ascending=existing.slice().reverse();
   if(ascending.some(r=>Number(r.ordinal)===ordinal)){
@@ -51,6 +52,8 @@ export async function POST(request:NextRequest){
     cached:true,nextDelaySeconds:45},{headers:noCache});
   }
   const last=ascending.at(-1);
+  if(last&&Date.now()-new Date(String(last.created_at)).getTime()<15000)
+   return NextResponse.json({error:'Revision is cooling down'},{status:429});
   if(ordinal!==(last?Number(last.ordinal)+1:1))
    return NextResponse.json({error:'Revision out of sequence'},{status:409});
   previousWorld=last?validateWorld(last.world):null;
@@ -73,6 +76,11 @@ export async function POST(request:NextRequest){
  }
  if(!process.env.OPENAI_API_KEY)
   return NextResponse.json({error:'Model unavailable'},{status:503});
+ const now=Date.now();
+ if((attemptCooldown.get(id)??0)>now)
+  return NextResponse.json({error:'Generation already requested'},{status:429});
+ if(attemptCooldown.size>300)attemptCooldown.clear();
+ attemptCooldown.set(id,now+10000);
  const directive=previousWorld?summarizeLabDirective(history,observations):null;
  const controller=new AbortController();
  const timeout=setTimeout(()=>controller.abort(),48000);
