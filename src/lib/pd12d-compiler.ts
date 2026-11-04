@@ -22,15 +22,16 @@ function defaultRule(blockId:string):SceneReflex{
 function normalizeScene(source:unknown,repairs:string[]):PageScene|null{
   const raw=obj(source);
   if(!raw||!Array.isArray(raw.blocks))return null;
-  const blocks=raw.blocks.map(b=>obj(b)).filter((b):b is Record<string,unknown>=>!!b)
+  const sourceBlocks=raw.blocks as unknown[];
+  const blocks=sourceBlocks.map(b=>obj(b)).filter((b):b is Record<string,unknown>=>!!b)
     .map(blockDefault);
-  if(blocks.length!==raw.blocks.length)return null;
+  if(blocks.length!==sourceBlocks.length)return null;
   let candidate:Record<string,unknown>={
     version:raw.version??1,composition:raw.composition??'column',
     accent:raw.accent??'neutral',blocks,
     ...(raw.reflexes!==undefined?{reflexes:raw.reflexes}:{})
   };
-  if(blocks.some((b,i)=>JSON.stringify(b)!==JSON.stringify(raw.blocks[i])))
+  if(blocks.some((b,i)=>JSON.stringify(b)!==JSON.stringify(sourceBlocks[i])))
     repairs.push('block_defaults');
   let scene=validateScene(candidate);
   if(!scene&&Array.isArray(raw.reflexes)&&raw.reflexes.length){
