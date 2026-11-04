@@ -91,6 +91,15 @@ export default function SandboxLab(){
   </form>
   <SandboxWorld world={world} onSignal={signal=>
     setSignals(previous=>[signal.kind+':'+signal.id,...previous].slice(0,12))}/>
+  <details style={{marginTop:20}}>
+    <summary>Inspect current world source</summary>
+    <p>HTML ({world.html.length} chars)</p>
+    <pre style={{maxHeight:240,overflow:'auto'}}>{world.html}</pre>
+    <p>CSS ({world.css.length} chars)</p>
+    <pre style={{maxHeight:240,overflow:'auto'}}>{world.css}</pre>
+    <p>JavaScript ({world.js.length} chars)</p>
+    <pre style={{maxHeight:240,overflow:'auto'}}>{world.js}</pre>
+  </details>
   <section><h2>Observed sandbox signals</h2>
    <p>Read-only interaction summaries; no privileged game actions are exposed.</p>
    <pre>{signals.join('\n')||'No sandbox activity recorded.'}</pre>
