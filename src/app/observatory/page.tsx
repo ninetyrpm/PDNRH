@@ -17,7 +17,8 @@ export default async function Observatory(){
   try{
     const [cohorts,sessions,arms,quality,governance,audit]=await Promise.all([
       sql`SELECT assignment,sessions,confirmed_losses,uncertain_sessions,active_sessions,sessions_with_baseline,mean_confirmed_loss_ms FROM pdnrh_cohort_evidence ORDER BY assignment`,
-      sql`SELECT s.id::text AS id,s.assignment,s.tactic_family,s.tactic_policy,s.status,s.loss_reason,s.elapsed_ms,s.started_at,
+      sql`SELECT s.id::text AS id,s.assignment,s.tactic_family,s.tactic_policy,s.status,s.loss_reason,s.elapsed_ms,s.started_at,s.engine_version,
+        (SELECT COUNT(*)::int FROM pd13_world_exposures WHERE session_id=s.id) AS authored_worlds,
         count(e.id)::int AS exposures,count(e.id) FILTER (WHERE e.ordinal=0)::int AS baselines,
         count(e.id) FILTER (WHERE e.ended_at IS NULL)::int AS open_exposures
         FROM sessions s LEFT JOIN exposures e ON e.session_id=s.id
@@ -46,7 +47,7 @@ export default async function Observatory(){
       <Evaluation/>
       <Analysis/>
       <section><h2>TACTIC FAMILIES</h2><div className="obs-table-wrap"><table><thead><tr><th>Family</th><th>Version</th><th>Exposures</th><th>Sessions</th></tr></thead><tbody>{arms.map(x=><tr key={String(x.strategy_family)+'-'+String(x.strategy_version)}><td>{String(x.strategy_family)}</td><td>{String(x.strategy_version)}</td><td>{String(x.exposures)}</td><td>{String(x.sessions)}</td></tr>)}</tbody></table></div></section>
-      <section><h2>RECENT SESSIONS</h2><div className="obs-table-wrap"><table><thead><tr><th>Started</th><th>ID</th><th>Assignment</th><th>Tactic</th><th>Policy</th><th>Status / Reason</th><th>Survival</th><th>Exposures</th><th>Baseline</th><th>Open</th></tr></thead><tbody>{sessions.map(x=><tr key={String(x.id)}><td>{formatTime(x.started_at)}</td><td><a className="obs-session-link" href={'/observatory/sessions/'+String(x.id)}><code>{String(x.id).slice(0,8)}</code></a></td><td>{String(x.assignment)}</td><td>{String(x.tactic_family??'—')}</td><td>{String(x.tactic_policy??'legacy')}</td><td>{String(x.status)} / {String(x.loss_reason??'—')}</td><td>{seconds(x.elapsed_ms)}</td><td>{String(x.exposures)}</td><td>{String(x.baselines)}</td><td>{String(x.open_exposures)}</td></tr>)}</tbody></table></div></section>
+      <section><h2>RECENT SESSIONS</h2><div className="obs-table-wrap"><table><thead><tr><th>Started</th><th>ID</th><th>Assignment</th><th>Tactic</th><th>Policy</th><th>Engine / Worlds</th><th>Status / Reason</th><th>Survival</th><th>Exposures</th><th>Baseline</th><th>Open</th></tr></thead><tbody>{sessions.map(x=><tr key={String(x.id)}><td>{formatTime(x.started_at)}</td><td><a className="obs-session-link" href={'/observatory/sessions/'+String(x.id)}><code>{String(x.id).slice(0,8)}</code></a></td><td>{String(x.assignment)}</td><td>{String(x.tactic_family??'—')}</td><td>{String(x.tactic_policy??'legacy')}</td><td>{String(x.status)} / {String(x.loss_reason??'—')}</td><td>{seconds(x.elapsed_ms)}</td><td>{String(x.exposures)}</td><td>{String(x.baselines)}</td><td>{String(x.open_exposures)}</td></tr>)}</tbody></table></div></section>
       <footer className="obs-note">Latest 50 sessions · Server-rendered snapshot · Refresh to update. No credentials or raw IP data are displayed.</footer>
     </main>;
   }catch{

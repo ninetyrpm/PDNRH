@@ -8,12 +8,13 @@ const MAX_FRAME_LIFETIME_MS=120000;
 const STARTUP_DEADLINE_MS=8000;
 
 /** Browser permission boundary, not a CPU/memory quota. No game shell actions. */
-export default function SandboxWorld({world,onSignal,onStatus,onSnapshot,seedState={}}:{
+export default function SandboxWorld({world,onSignal,onStatus,onSnapshot,seedState={},live=false}:{
  world:AuthoredWorld;
  onSignal?:(signal:Signal)=>void;
  onStatus?:(status:SandboxStatus)=>void;
  onSnapshot?:(state:WorldState)=>void;
  seedState?:WorldState;
+ live?:boolean;
 }){
  const frame=useRef<HTMLIFrameElement>(null);
  const callback=useRef(onSignal);
@@ -92,12 +93,12 @@ export default function SandboxWorld({world,onSignal,onStatus,onSnapshot,seedSta
   report('stopped');
  }
  return <div>
-  <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',marginBottom:8}}>
+  {!live&&<div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',marginBottom:8}}>
    <span role="status">Sandbox: {valid?status:'invalid world'}</span>
    <span>Frame focus: {frameFocused?'inside':'outside'}</span>
    <button type="button" onClick={restart} disabled={!valid}>RESTART FRAME</button>
    <button type="button" onClick={stop} disabled={!active}>STOP FRAME</button>
-  </div>
+  </div>}
   {!valid?<p>Invalid authored environment.</p>:
    !active?<p>The isolated frame has been unloaded. Restart it to run this world again.</p>:
    !nonce?<p>Preparing isolated environment…</p>:

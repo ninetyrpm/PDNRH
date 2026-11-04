@@ -14,15 +14,15 @@ export function chooseAssignment(n = randomInt(100)): Assignment {
 export function hashCredential(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
 }
-export async function openExperimentSession() {
+export async function openExperimentSession(engine: 'pd12d-v1'|'pd13e-v1'='pd12d-v1') {
   const id = randomUUID();
   const credential = randomBytes(32).toString('base64url');
-  const assignment = chooseAssignment();
+  const assignment = engine==='pd13e-v1' ? 'adaptive' : chooseAssignment();
   const sql = db();
   const cohorts = await sql`SELECT COUNT(*)::int AS n FROM sessions WHERE assignment='baseline_control' AND status='confirmed_loss' AND elapsed_ms IS NOT NULL`;
   const arms = await sql`SELECT tactic_family AS family,COUNT(*)::int AS completed,AVG(elapsed_ms)::float8 AS mean_elapsed_ms
     FROM sessions WHERE assignment='adaptive' AND status='confirmed_loss' AND elapsed_ms IS NOT NULL
-    AND tactic_family IS NOT NULL GROUP BY tactic_family`;
+    AND tactic_family IS NOT NULL AND engine_version!='pd13e-v1' GROUP BY tactic_family`;
   const evidence = { baselineCompleted: Number(cohorts[0]?.n ?? 0),
     arms: arms.map(r => ({family:String(r.family), completed:Number(r.completed), meanElapsedMs:Number(r.mean_elapsed_ms)})) };
   const governance=await sql`SELECT mode,revision FROM experiment_policy_control WHERE singleton=true`;
@@ -33,7 +33,7 @@ export async function openExperimentSession() {
     {weights:Array(3).fill(1/3) as number[],policy:'uniform-v1',eligible:false};
   const tactic = assignment==='adaptive' ? selectTactic(id,selection.weights) : null;
   await sql`INSERT INTO sessions(id,credential_hash,assignment,tactic_family,tactic_policy,engine_version)
-    VALUES(${id},${hashCredential(credential)},${assignment},${tactic?.family ?? null},${tactic ? selection.policy+'-governance-r'+revision : 'control-v1'},'pd12d-v1')`;
+    VALUES(${id},${hashCredential(credential)},${assignment},${tactic?.family ?? null},${tactic ? selection.policy+'-governance-r'+revision : 'control-v1'},${engine})`;
   // Create the baseline exposure before returning credentials, so a rapid exit
   // cannot race its insertion. Retried clients cannot create duplicate ordinals.
   await sql`INSERT INTO exposures(session_id,ordinal,mutation,source)
