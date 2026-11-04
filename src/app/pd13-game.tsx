@@ -6,6 +6,7 @@ import {makeBehaviorCollector} from '@/lib/behavior';
 import {validateWorld,type AuthoredWorld,type WorldState} from '@/lib/sandbox-world';
 import {observationsFromSignals} from '@/lib/sandbox-revision';
 import SandboxWorld,{type SandboxStatus} from './sandbox-world';
+import styles from './pd13-game.module.css';
 
 const STORAGE_KEY='pdnrh-active-round';
 const INITIAL:SessionSnapshot={id:'',elapsedMs:0,clicks:0,scrolls:0,idleMs:0,
@@ -213,7 +214,7 @@ export default function PD13Game(){
    </>:snapshot.phase==='lost'?<div className="instructions" role="status">
     <p className="verdict">THE MACHINE WINS.</p><p>{REASONS[snapshot.lossReason??'blur']}</p>
     <button type="button" onClick={()=>window.location.reload()}>TRY AGAIN</button>
-   </div>:world?<div className="pd13-stage">
+   </div>:world?<div className={styles.stage}>
     <SandboxWorld key={ordinal} live world={world} seedState={seedState}
       onStatus={setFrameStatus}
       onSnapshot={value=>{snapshotRef.current=value;}}
@@ -225,7 +226,7 @@ export default function PD13Game(){
        }
       }}/>
    </div>:<div className="instructions"><p>Constructing the first environment.</p></div>}
-   {playing&&<p className="muted" role="status">
+   {playing&&<p className={styles.status} role="status">
      {status} · exposure {ordinal} · frame {frameStatus??'pending'}
    </p>}
   </div>
