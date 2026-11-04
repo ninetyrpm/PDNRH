@@ -21,7 +21,7 @@ test('PD12D.1 uses a generation window adequate for structured plans',()=>{
  assert.match(compact.PD12D_SYSTEM,/scenePatch/);
  assert.match(compact.PD12D_SYSTEM,/plan/);
  assert.match(compact.PD12D_SYSTEM,/reflex/);
- assert.match(compact.PD12D_SYSTEM,/one JSON object/);
+ assert.match(compact.PD12D_SYSTEM,/one compact JSON object/);
  assert.match(compact.PD12D_SYSTEM,/departure/);
 });
 test('PD12D.1 input includes bounded history and does not duplicate instructions',()=>{
