@@ -7,12 +7,12 @@ export default function SandboxWorld({world,onSignal}:{
  world:AuthoredWorld;onSignal?:(signal:Signal)=>void
 }){
  const frame=useRef<HTMLIFrameElement>(null);
- const [nonce]=useState(()=>{
-  const bytes=new Uint8Array(24);
-  if(typeof crypto!=='undefined')crypto.getRandomValues(bytes);
-  return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
- });
- const document=useMemo(()=>worldDocument(world,nonce),[world,nonce]);
+ const [nonce,setNonce]=useState('');
+ useEffect(()=>{
+  const bytes=crypto.getRandomValues(new Uint8Array(24));
+  setNonce(Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join(''));
+ },[]);
+ const document=useMemo(()=>nonce&&validateWorld(world)?worldDocument(world,nonce):'', [world,nonce]);
  useEffect(()=>{
   const onMessage=(event:MessageEvent)=>{
    if(event.source!==frame.current?.contentWindow||event.origin!=='null')return;
@@ -27,6 +27,7 @@ export default function SandboxWorld({world,onSignal}:{
   return()=>window.removeEventListener('message',onMessage);
  },[nonce,onSignal]);
  if(!validateWorld(world))return <p>Invalid authored environment.</p>;
+ if(!nonce)return <p>Preparing isolated environment…</p>;
  return <iframe ref={frame} title="Isolated authored environment"
   sandbox="allow-scripts" referrerPolicy="no-referrer"
   srcDoc={document} style={{display:"block",width:"100%",height:680,border:"1px solid #555e66",background:"#101116"}}/>;
