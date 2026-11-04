@@ -7,6 +7,7 @@ import { creativeFallback,validateCreativeMutation,isStructurallyNovel } from '@
 import { recentStrategyMemory, behavioralContext } from '@/lib/adversary-context';
 import { applyPagePatch } from '@/lib/page-runtime';
 import {PD12D_SYSTEM,PD12D_TIMEOUT_MS,PD12D_MAX_TOKENS,compactPd12dContext} from '@/lib/pd12d-compact';
+import {compilePd12dOutput} from '@/lib/pd12d-compiler';
 import {deriveStrategicDirective,validateStrategyState,commitStrategy,
   type StrategyState,type StrategicDirective} from '@/lib/strategic-planner';
 
@@ -163,16 +164,48 @@ export async function POST(request: NextRequest) {
       outputLength:typeof raw==='string'?raw.length:0
     });
     const modelData=typeof raw === 'string' ? JSON.parse(raw) : null;
-    let proposed=modelData;
-    if(['pd12b-v1','pd12c-v1','pd12d-v1'].includes(engineVersion)&&modelData&&typeof modelData==='object'&&modelData.scenePatch!==undefined){
-      const resolved=applyPagePatch(previousScene,modelData.scenePatch);
-      proposed=resolved?{...modelData,scene:resolved.scene,scenePatch:resolved.patch}:null;
+    let mutation:ReturnType<typeof validateMutation>=null;
+    if(pd12d){
+      const compiled=compilePd12dOutput(modelData,previousScene,{
+        pivotRequired:directive?.pivotRequired??false,
+        avoidApproach:directive?.avoidApproach??null
+      });
+      mutation=compiled.mutation;
+      if(!mutation){
+        console.error('[pdnrh:mutation] output_rejected',{
+          category:compiled.failure??'unknown',repairCodes:compiled.repairs,
+          hasScene:!!modelData?.scene,hasPatch:!!modelData?.scenePatch,
+          hasPlan:!!modelData?.plan
+        });
+        return NextResponse.json({mutation:fallback,source:'fallback',
+          fallbackReason:'invalid_model_output'},{headers:{'Cache-Control':'no-store'}});
+      }
+      if(JSON.stringify(mutation.scene)===JSON.stringify(previousScene)){
+        console.error('[pdnrh:mutation] output_rejected',{category:'no_scene_change'});
+        return NextResponse.json({mutation:fallback,source:'fallback',
+          fallbackReason:'no_scene_change'},{headers:{'Cache-Control':'no-store'}});
+      }
+      if(compiled.repairs.length)console.info('[pdnrh:mutation] safe_normalization',{
+        repairs:compiled.repairs
+      });
+    }else{
+      let proposed=modelData;
+      if(['pd12b-v1','pd12c-v1'].includes(engineVersion)&&modelData&&
+        typeof modelData==='object'&&modelData.scenePatch!==undefined){
+        const resolved=applyPagePatch(previousScene,modelData.scenePatch);
+        proposed=resolved?{...modelData,scene:resolved.scene,scenePatch:resolved.patch}:null;
+      }
+      mutation=validateMutation(proposed);
+      if(!mutation || (engineVersion==='pd12c-v1'&&!mutation.scene?.reflexes?.length) ||
+        (creative&&(!validateCreativeMutation(mutation)||
+          (['pd12b-v1','pd12c-v1'].includes(engineVersion)&&mutation.scenePatch?
+          JSON.stringify(mutation.scene)===JSON.stringify(previousScene):
+          !isStructurallyNovel(mutation,memory.at(-1)))))){
+        console.error('[pdnrh:mutation] invalid_model_output_or_missing_scene');
+        return NextResponse.json({mutation:fallback,source:'fallback',
+          fallbackReason:'invalid_model_output'},{headers:{'Cache-Control':'no-store'}});
+      }
     }
-    const mutation = validateMutation(proposed);
-    if (!mutation || (['pd12c-v1','pd12d-v1'].includes(engineVersion)&&!mutation?.scene?.reflexes?.length) || (creative&&(!validateCreativeMutation(mutation)||
-      (['pd12b-v1','pd12c-v1','pd12d-v1'].includes(engineVersion)&&mutation.scenePatch ?
-        JSON.stringify(mutation.scene)===JSON.stringify(previousScene) :
-        !isStructurallyNovel(mutation,memory.at(-1)))))) { console.error('[pdnrh:mutation] invalid_model_output_or_missing_scene'); return NextResponse.json({mutation:fallback,source:'fallback',fallbackReason:'invalid_model_output'},{headers:{'Cache-Control':'no-store'}}); }
     if(engineVersion==='pd12d-v1'){
       if(!mutation.plan||!directive|| (directive.pivotRequired&&
         mutation.plan.approach===directive.avoidApproach)){
