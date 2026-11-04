@@ -6,6 +6,7 @@ import { TACTIC_LIBRARY } from '@/lib/tactics';
 import { creativeFallback,validateCreativeMutation,isStructurallyNovel } from '@/lib/creative-engine';
 import { recentStrategyMemory, behavioralContext } from '@/lib/adversary-context';
 import { applyPagePatch } from '@/lib/page-runtime';
+import {PD12D_SYSTEM,PD12D_TIMEOUT_MS,PD12D_MAX_TOKENS,compactPd12dContext} from '@/lib/pd12d-compact';
 import {deriveStrategicDirective,validateStrategyState,commitStrategy,
   type StrategyState,type StrategicDirective} from '@/lib/strategic-planner';
 
@@ -112,16 +113,30 @@ export async function POST(request: NextRequest) {
     assignedTactic: {family:tactic.family,version:tactic.version,instruction:tactic.instruction},
     previousHeadline: memory.at(-1)?.headline ?? BASE_MUTATION.headline
   };
+  const pd12d=engineVersion==='pd12d-v1';
+  const generationStarted=Date.now();
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), engineVersion==='pd12d-v1'?15000:12000);
+    const timeout = setTimeout(() => controller.abort(), pd12d?PD12D_TIMEOUT_MS:12000);
     let response: Response;
     try {
       response = await fetch('https://api.openai.com/v1/chat/completions', {
         method:'POST',signal:controller.signal,
         headers:{'Authorization':`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},
-        body:JSON.stringify({model:process.env.OPENAI_MODEL || 'gpt-4.1-mini',max_completion_tokens:engineVersion==='pd12d-v1'?4200:3300,response_format:{type:'json_object'},
-          messages:[{role:'system',content:SYSTEM+(creative?'\n'+creativeInstruction:'')+(patchInstruction?'\n'+patchInstruction:'')+(reflexInstruction?'\n'+reflexInstruction:'')+(strategyInstruction?'\n'+strategyInstruction:'')},{role:'user',content:JSON.stringify(input)}]})
+        body:JSON.stringify({model:process.env.OPENAI_MODEL || 'gpt-4.1-mini',max_completion_tokens:pd12d?PD12D_MAX_TOKENS:3300,response_format:{type:'json_object'},
+          messages:pd12d?[
+            {role:'system',content:PD12D_SYSTEM},
+            {role:'user',content:JSON.stringify(compactPd12dContext({
+              elapsedSeconds:input.elapsedSeconds,step,
+              assignedTactic:input.assignedTactic,
+              behavior:behavior.current,
+              previousStrategy,directive,
+              previousWorld:input.currentWorld,
+              lastMutations:memory.map(m=>({ordinal:m.ordinal,approach:m.plan?.approach??null,
+                strategy:m.strategy,headline:m.headline,composition:m.composition})),
+              previousTest:previousExperimentResult
+            }))}
+          ]:[{role:'system',content:SYSTEM+(creative?'\n'+creativeInstruction:'')+(patchInstruction?'\n'+patchInstruction:'')+(reflexInstruction?'\n'+reflexInstruction:'')+(strategyInstruction?'\n'+strategyInstruction:'')},{role:'user',content:JSON.stringify(input)}]})
       });
     } finally { clearTimeout(timeout); }
     if (!response.ok) {
@@ -142,6 +157,11 @@ export async function POST(request: NextRequest) {
     }
     const data = await response.json();
     const raw = data?.choices?.[0]?.message?.content;
+    if(pd12d)console.info('[pdnrh:mutation] provider_completed',{
+      elapsedMs:Date.now()-generationStarted,
+      finishReason:data?.choices?.[0]?.finish_reason??'unknown',
+      outputLength:typeof raw==='string'?raw.length:0
+    });
     const modelData=typeof raw === 'string' ? JSON.parse(raw) : null;
     let proposed=modelData;
     if(['pd12b-v1','pd12c-v1','pd12d-v1'].includes(engineVersion)&&modelData&&typeof modelData==='object'&&modelData.scenePatch!==undefined){
@@ -180,7 +200,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({mutation,source:'model'},{headers:{'Cache-Control':'no-store'}});
   } catch (error) {
     const reason = error instanceof Error && error.name === 'AbortError' ? 'provider_timeout' : 'provider_exception';
-    console.error('[pdnrh:mutation]',reason, error instanceof Error ? error.name : 'unknown');
+    console.error('[pdnrh:mutation]',reason,{
+      errorName:error instanceof Error?error.name:'unknown',
+      elapsedMs:Date.now()-generationStarted,
+      engine:engineVersion
+    });
     return NextResponse.json({mutation:fallback,source:'fallback',fallbackReason:reason},{headers:{'Cache-Control':'no-store'}});
   }
 }
