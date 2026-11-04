@@ -22,7 +22,7 @@ export async function openExperimentSession(engine: 'pd12d-v1'|'pd13e-v1'='pd12d
   const cohorts = await sql`SELECT COUNT(*)::int AS n FROM sessions WHERE assignment='baseline_control' AND status='confirmed_loss' AND elapsed_ms IS NOT NULL`;
   const arms = await sql`SELECT tactic_family AS family,COUNT(*)::int AS completed,AVG(elapsed_ms)::float8 AS mean_elapsed_ms
     FROM sessions WHERE assignment='adaptive' AND status='confirmed_loss' AND elapsed_ms IS NOT NULL
-    AND tactic_family IS NOT NULL GROUP BY tactic_family`;
+    AND tactic_family IS NOT NULL AND engine_version!='pd13e-v1' GROUP BY tactic_family`;
   const evidence = { baselineCompleted: Number(cohorts[0]?.n ?? 0),
     arms: arms.map(r => ({family:String(r.family), completed:Number(r.completed), meanElapsedMs:Number(r.mean_elapsed_ms)})) };
   const governance=await sql`SELECT mode,revision FROM experiment_policy_control WHERE singleton=true`;
