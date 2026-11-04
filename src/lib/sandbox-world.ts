@@ -15,10 +15,28 @@ export function validateWorld(value:unknown):AuthoredWorld|null{
 /** The document lives in a sandboxed, opaque-origin iframe. It must not be
  * treated as a resource-limited VM: a runaway script can still consume CPU.
  */
-export function worldDocument(world:AuthoredWorld,nonce:string):string{
+export type WorldState=Record<string,number|boolean|string>;
+/** Only anonymous, flat, bounded primitives are eligible for state handoff. */
+export function validateWorldState(value:unknown):WorldState|null{
+ if(!value||typeof value!=='object'||Array.isArray(value))return null;
+ const rows=Object.entries(value);
+ if(rows.length>16)return null;
+ const state:WorldState={};
+ for(const [key,item] of rows){
+  if(!/^[a-z][a-z0-9_-]{0,31}$/.test(key))return null;
+  if(typeof item==='number'&&Number.isFinite(item)&&Math.abs(item)<=100000)state[key]=item;
+  else if(typeof item==='boolean')state[key]=item;
+  else if(typeof item==='string'&&/^[a-zA-Z0-9 _-]{0,32}$/.test(item))state[key]=item;
+  else return null;
+ }
+ return state;
+}
+export function worldDocument(world:AuthoredWorld,nonce:string,seedState:WorldState={}):string{
  const valid=validateWorld(world);
  if(!valid)throw Error('Invalid authored world');
  if(!/^[a-zA-Z0-9_-]{24,96}$/.test(nonce))throw Error('Invalid nonce');
+ const safeState=validateWorldState(seedState);
+ if(!safeState)throw Error('Invalid seed state');
  const csp=["default-src 'none'","script-src 'unsafe-inline'","style-src 'unsafe-inline'",
   "img-src data:","font-src 'none'","connect-src 'none'","media-src 'none'",
   "object-src 'none'","frame-src 'none'","worker-src 'none'",
@@ -28,6 +46,22 @@ export function worldDocument(world:AuthoredWorld,nonce:string):string{
  const bridge=`
  (()=>{const protocol=${JSON.stringify(WORLD_PROTOCOL)},nonce=${JSON.stringify(nonce)};
  let count=0;
+ Object.defineProperty(window,'PDNRH_SEED_STATE',{
+  value:Object.freeze(${JSON.stringify(safeState)}),configurable:false,writable:false
+ });
+ window.addEventListener('message',event=>{
+  if(event.source!==parent||!event.data||event.data.protocol!==protocol||
+     event.data.nonce!==nonce||event.data.kind!=='snapshot_request')return;
+  let snapshot=null;
+  try{
+   if(typeof window.PDNRH_EXPORT_STATE==='function'){
+    const result=window.PDNRH_EXPORT_STATE();
+    const value=JSON.stringify(result);
+    if(value&&value.length<=1000)snapshot=JSON.parse(value);
+   }
+  }catch{}
+  parent.postMessage({protocol,nonce,kind:'snapshot',id:'world',state:snapshot},'*');
+ });
  document.addEventListener('click',event=>{
   const element=event.target;
   const id=element?.closest?.('[data-world-id]')?.getAttribute('data-world-id');

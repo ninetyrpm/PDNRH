@@ -1,8 +1,9 @@
 'use client';
-import {useState} from 'react';
+import {useRef,useState} from 'react';
 import SandboxWorld from '../sandbox-world';
 import styles from './lab.module.css';
-import {validateWorld,type AuthoredWorld} from '@/lib/sandbox-world';
+import {validateWorld,type AuthoredWorld,type WorldState} from '@/lib/sandbox-world';
+import {observationsFromSignals} from '@/lib/sandbox-revision';
 
 const example:AuthoredWorld={
  version:1,
@@ -45,6 +46,53 @@ export default function SandboxLab(){
  const [generating,setGenerating]=useState(false);
  const [generationError,setGenerationError]=useState('');
  const [generationCount,setGenerationCount]=useState(0);
+ const [seedState,setSeedState]=useState<WorldState>({});
+ const snapshotRef=useRef<WorldState>({});
+ const eventsRef=useRef<{kind:'ready'|'click';id:string}[]>([]);
+ const worldStartedRef=useRef(Date.now());
+ const [versions,setVersions]=useState<{world:AuthoredWorld;rationale:string;seed:WorldState}[]>([
+  {world:example,rationale:'Fixture',seed:{}}
+ ]);
+ const [selected,setSelected]=useState(0);
+ const [revising,setRevising]=useState(false);
+ const [revisionError,setRevisionError]=useState('');
+ function resetObservations(){
+  eventsRef.current=[];snapshotRef.current={};worldStartedRef.current=Date.now();
+  setSignals([]);
+ }
+ async function revise(){
+  if(revising||generating)return;
+  setRevising(true);setRevisionError('');
+  try{
+   const observations=observationsFromSignals(eventsRef.current,
+    (Date.now()-worldStartedRef.current)/1000);
+   const response=await fetch('/api/sandbox-lab/revise',{
+    method:'POST',credentials:'same-origin',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({world,observations,direction:concept.slice(0,300)})
+   });
+   const data:unknown=await response.json();
+   const record=data&&typeof data==='object'&&!Array.isArray(data)?
+    data as Record<string,unknown>:{};
+   const next=validateWorld(record.world);
+   if(!response.ok||!next)throw Error(typeof record.error==='string'?
+    record.error:'Revision was invalid');
+   const revision=record.revision&&typeof record.revision==='object'?
+    record.revision as Record<string,unknown>:{};
+   const rationale=typeof revision.rationale==='string'?revision.rationale:'Model revision';
+   const seed={...snapshotRef.current};
+   const nextVersions=[...versions.slice(0,selected+1),{world:next,rationale,seed}].slice(-8);
+   setVersions(nextVersions);setSelected(nextVersions.length-1);
+   setSeedState(seed);setWorld(next);resetObservations();
+  }catch(error){
+   setRevisionError(error instanceof Error?error.message:'Revision failed');
+  }finally{setRevising(false);}
+ }
+ function restoreVersion(index:number){
+  if(index<0||index>=versions.length||revising||generating)return;
+  setSelected(index);setWorld(versions[index].world);
+  setSeedState(versions[index].seed);resetObservations();
+ }
  async function generate(event:React.FormEvent<HTMLFormElement>){
   event.preventDefault();
   if(generating)return;
@@ -61,7 +109,9 @@ export default function SandboxLab(){
    const generated=validateWorld(record.world);
    if(!response.ok||!generated)throw Error(typeof record.error==='string'?
      record.error:'Model returned an invalid authored environment');
-   setWorld(generated);setGenerationCount(value=>value+1);setSignals([]);
+   setWorld(generated);setGenerationCount(value=>value+1);
+   setVersions([{world:generated,rationale:'Generated world',seed:{}}]);
+   setSelected(0);setSeedState({});resetObservations();
   }catch(error){
    setGenerationError(error instanceof Error?error.message:'Generation failed');
   }finally{setGenerating(false);}
@@ -82,15 +132,36 @@ export default function SandboxLab(){
         {generating?'GENERATING…':'GENERATE A WORLD'}
       </button>
       <button type="button" disabled={generating} onClick={()=>{
-        setWorld(example);setGenerationError('');setSignals([]);setGenerationCount(0);
+        setWorld(example);setGenerationError('');setGenerationCount(0);
+        setVersions([{world:example,rationale:'Fixture',seed:{}}]);setSelected(0);
+        setSeedState({});resetObservations();
       }}>RESTORE FIXTURE</button>
     </div>
     {generationError&&<p role="alert">{generationError}</p>}
     <small>{generationCount>0?'Model-authored world · ':'Local fixture · '}
       Generated code is untrusted and should not be used in a live round.</small>
   </form>
-  <SandboxWorld world={world} onSignal={signal=>
-    setSignals(previous=>[signal.kind+':'+signal.id,...previous].slice(0,12))}/>
+  <section style={{display:'grid',gap:12,marginBottom:20}}>
+   <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+    <button type="button" disabled={generating||revising||concept.trim().length<5}
+      onClick={()=>void revise()}>
+      {revising?'REVISING…':'REVISE CURRENT WORLD'}
+    </button>
+    <span>Version {selected+1} / {versions.length}</span>
+   </div>
+   {revisionError&&<p role="alert">{revisionError}</p>}
+   <div style={{display:'flex',gap:7,flexWrap:'wrap'}}>
+    {versions.map((revision,index)=><button key={index} type="button"
+      disabled={generating||revising} aria-current={index===selected?'step':undefined}
+      onClick={()=>restoreVersion(index)}>v{index+1}: {revision.rationale.slice(0,48)}</button>)}
+   </div>
+  </section>
+  <SandboxWorld world={world} seedState={seedState} onSnapshot={value=>{
+    snapshotRef.current=value;
+  }} onSignal={signal=>{
+    eventsRef.current=[...eventsRef.current,signal].slice(-120);
+    setSignals(previous=>[signal.kind+':'+signal.id,...previous].slice(0,12));
+  }}/>
   <details style={{marginTop:20}}>
     <summary>Inspect current world source</summary>
     <p>HTML ({world.html.length} chars)</p>
