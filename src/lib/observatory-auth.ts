@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { cookies } from 'next/headers';
 
-export const observatoryCookie='pdnrh-observatory';
+export const observatoryCookie='pdnrh-admin-session';
 const durationSeconds=60*60*4;
 function digest(value:string){return createHash('sha256').update(value).digest();}
 function configuredSecret(){
