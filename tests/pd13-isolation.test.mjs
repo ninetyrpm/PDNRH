@@ -55,7 +55,7 @@ test('PD13A generation requires admin authorization and never edits live session
  assert.ok(auth>=0&&provider>auth);
  assert.match(endpoint,/incomingOrigin/);
  assert.match(endpoint,/Generation cooling down/);
- assert.match(endpoint,/validateWorld\(parsed\)/);
+ assert.match(endpoint,/interpretGeneratedWorld\(data\)/);
  assert.doesNotMatch(endpoint,/INSERT INTO sessions|UPDATE sessions|session_strategy_state/);
 });
 test('PD13A lab is admin-only, while regular player UI remains unchanged',()=>{
