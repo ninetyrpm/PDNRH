@@ -2,7 +2,7 @@
 import {useState} from 'react';
 import SandboxWorld from '../sandbox-world';
 import styles from './lab.module.css';
-import type {AuthoredWorld} from '@/lib/sandbox-world';
+import {validateWorld,type AuthoredWorld} from '@/lib/sandbox-world';
 
 const example:AuthoredWorld={
  version:1,
@@ -40,13 +40,56 @@ const example:AuthoredWorld={
 };
 export default function SandboxLab(){
  const [signals,setSignals]=useState<string[]>([]);
+ const [world,setWorld]=useState<AuthoredWorld>(example);
+ const [concept,setConcept]=useState('Invent a visually striking interactive environment that notices repeated visitor approaches and gradually changes its behavior.');
+ const [generating,setGenerating]=useState(false);
+ const [generationError,setGenerationError]=useState('');
+ const [generationCount,setGenerationCount]=useState(0);
+ async function generate(event:React.FormEvent<HTMLFormElement>){
+  event.preventDefault();
+  if(generating)return;
+  setGenerating(true);setGenerationError('');
+  try{
+   const response=await fetch('/api/sandbox-lab/generate',{
+    method:'POST',credentials:'same-origin',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({concept})
+   });
+   const payload:unknown=await response.json();
+   const record=payload&&typeof payload==='object'&&!Array.isArray(payload)?
+      payload as Record<string,unknown>:{};
+   const generated=validateWorld(record.world);
+   if(!response.ok||!generated)throw Error(typeof record.error==='string'?
+     record.error:'Model returned an invalid authored environment');
+   setWorld(generated);setGenerationCount(value=>value+1);setSignals([]);
+  }catch(error){
+   setGenerationError(error instanceof Error?error.message:'Generation failed');
+  }finally{setGenerating(false);}
+ }
  return <main className={styles.pdLab}>
   <header><span>PDNRH / PD13A</span><span>ISOLATION PROTOTYPE</span></header>
   <h1>MODEL-AUTHORED ENVIRONMENT</h1>
-  <p>This is a locally authored fixture, not a generated adversarial mutation.
-    It demonstrates custom HTML, CSS and procedural behavior inside an isolated frame.
-    It is not connected to a live experiment.</p>
-  <SandboxWorld world={example} onSignal={signal=>
+  <p>Generate an original interactive artwork using the connected model, or explore the built-in fixture.
+    Authored HTML, CSS and JavaScript run in an opaque-origin frame without network access.
+    This lab is not connected to a live experiment.</p>
+  <form onSubmit={generate} style={{maxWidth:850,marginBottom:25,display:'grid',gap:12}}>
+    <label htmlFor="concept">Creative direction</label>
+    <textarea id="concept" value={concept} maxLength={500} rows={3}
+      onChange={event=>setConcept(event.target.value)}
+      style={{background:'#171b21',color:'#eee',border:'1px solid #65707c',padding:12,font:'inherit'}}/>
+    <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+      <button type="submit" disabled={generating||concept.trim().length<5}>
+        {generating?'GENERATING…':'GENERATE A WORLD'}
+      </button>
+      <button type="button" disabled={generating} onClick={()=>{
+        setWorld(example);setGenerationError('');setSignals([]);setGenerationCount(0);
+      }}>RESTORE FIXTURE</button>
+    </div>
+    {generationError&&<p role="alert">{generationError}</p>}
+    <small>{generationCount>0?'Model-authored world · ':'Local fixture · '}
+      Generated code is untrusted and should not be used in a live round.</small>
+  </form>
+  <SandboxWorld world={world} onSignal={signal=>
     setSignals(previous=>[signal.kind+':'+signal.id,...previous].slice(0,12))}/>
   <section><h2>Observed sandbox signals</h2>
    <p>Read-only interaction summaries; no privileged game actions are exposed.</p>
