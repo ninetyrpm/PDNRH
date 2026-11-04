@@ -29,5 +29,5 @@ export default function SandboxWorld({world,onSignal}:{
  if(!validateWorld(world))return <p>Invalid authored environment.</p>;
  return <iframe ref={frame} title="Isolated authored environment"
   sandbox="allow-scripts" referrerPolicy="no-referrer"
-  srcDoc={document} className="pd-sandbox-world"/>;
+  srcDoc={document} style={{display:"block",width:"100%",height:680,border:"1px solid #555e66",background:"#101116"}}/>;
 }
