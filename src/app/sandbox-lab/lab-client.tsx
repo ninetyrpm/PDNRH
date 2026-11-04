@@ -4,6 +4,7 @@ import SandboxWorld from '../sandbox-world';
 import styles from './lab.module.css';
 import {validateWorld,type AuthoredWorld,type WorldState} from '@/lib/sandbox-world';
 import {observationsFromSignals} from '@/lib/sandbox-revision';
+import {validateLabPlan,type LabStrategyEntry,type LabDirective} from '@/lib/lab-strategy';
 
 const example:AuthoredWorld={
  version:1,
@@ -56,6 +57,45 @@ export default function SandboxLab(){
  const [selected,setSelected]=useState(0);
  const [revising,setRevising]=useState(false);
  const [revisionError,setRevisionError]=useState('');
+ const [strategizing,setStrategizing]=useState(false);
+ const [strategyError,setStrategyError]=useState('');
+ const [strategyHistory,setStrategyHistory]=useState<LabStrategyEntry[]>([]);
+ const [lastDirective,setLastDirective]=useState<LabDirective|null>(null);
+ async function strategize(){
+  if(strategizing||revising||generating)return;
+  setStrategizing(true);setStrategyError('');
+  try{
+   const observations=observationsFromSignals(eventsRef.current,
+     (Date.now()-worldStartedRef.current)/1000);
+   const response=await fetch('/api/sandbox-lab/strategize',{
+    method:'POST',credentials:'same-origin',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({world,observations,history:strategyHistory,direction:concept.slice(0,300)})
+   });
+   const payload:unknown=await response.json();
+   const record=payload&&typeof payload==='object'&&!Array.isArray(payload)?
+    payload as Record<string,unknown>:{};
+   const next=validateWorld(record.world);
+   const plan=validateLabPlan(record.plan);
+   const directive=record.directive as LabDirective|undefined;
+   const changed=record.changedSourceCharacters;
+   if(!response.ok||!next||!plan||!directive||
+      typeof changed!=='number'||!Number.isInteger(changed))
+    throw Error(typeof record.error==='string'?record.error:'Invalid strategic world');
+   const revision=record.revision&&typeof record.revision==='object'?
+    record.revision as Record<string,unknown>:{};
+   const rationale=typeof revision.rationale==='string'?revision.rationale:plan.changeReason;
+   const seed={...snapshotRef.current};
+   const nextVersions=[...versions.slice(0,selected+1),{world:next,rationale,seed}].slice(-8);
+   setVersions(nextVersions);setSelected(nextVersions.length-1);
+   setStrategyHistory(previous=>[...previous,{plan,exitProxyCount:directive.exitProxies,
+     engagementCount:directive.engagementClicks,changedSourceCharacters:changed}].slice(-8));
+   setLastDirective(directive);
+   setSeedState(seed);setWorld(next);resetObservations();
+  }catch(error){
+   setStrategyError(error instanceof Error?error.message:'Strategic revision failed');
+  }finally{setStrategizing(false);}
+ }
  function resetObservations(){
   eventsRef.current=[];snapshotRef.current={};worldStartedRef.current=Date.now();
   setSignals([]);
@@ -84,6 +124,7 @@ export default function SandboxLab(){
    const nextVersions=[...versions.slice(0,selected+1),{world:next,rationale,seed}].slice(-8);
    setVersions(nextVersions);setSelected(nextVersions.length-1);
    setSeedState(seed);setWorld(next);resetObservations();
+   setStrategyHistory([]);setLastDirective(null);
   }catch(error){
    setRevisionError(error instanceof Error?error.message:'Revision failed');
   }finally{setRevising(false);}
@@ -92,6 +133,7 @@ export default function SandboxLab(){
   if(index<0||index>=versions.length||revising||generating)return;
   setSelected(index);setWorld(versions[index].world);
   setSeedState(versions[index].seed);resetObservations();
+  setStrategyHistory([]);setLastDirective(null);
  }
  async function generate(event:React.FormEvent<HTMLFormElement>){
   event.preventDefault();
@@ -112,12 +154,13 @@ export default function SandboxLab(){
    setWorld(generated);setGenerationCount(value=>value+1);
    setVersions([{world:generated,rationale:'Generated world',seed:{}}]);
    setSelected(0);setSeedState({});resetObservations();
+   setStrategyHistory([]);setLastDirective(null);
   }catch(error){
    setGenerationError(error instanceof Error?error.message:'Generation failed');
   }finally{setGenerating(false);}
  }
  return <main className={styles.pdLab}>
-  <header><span>PDNRH / PD13A</span><span>ISOLATION PROTOTYPE</span></header>
+  <header><span>PDNRH / PD13D</span><span>ISOLATED STRATEGY LABORATORY</span></header>
   <h1>MODEL-AUTHORED ENVIRONMENT</h1>
   <p>Generate an original interactive artwork using the connected model, or explore the built-in fixture.
     Authored HTML, CSS and JavaScript run in an opaque-origin frame without network access.
@@ -135,6 +178,7 @@ export default function SandboxLab(){
         setWorld(example);setGenerationError('');setGenerationCount(0);
         setVersions([{world:example,rationale:'Fixture',seed:{}}]);setSelected(0);
         setSeedState({});resetObservations();
+        setStrategyHistory([]);setLastDirective(null);
       }}>RESTORE FIXTURE</button>
     </div>
     {generationError&&<p role="alert">{generationError}</p>}
@@ -143,18 +187,36 @@ export default function SandboxLab(){
   </form>
   <section style={{display:'grid',gap:12,marginBottom:20}}>
    <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
-    <button type="button" disabled={generating||revising||concept.trim().length<5}
+    <button type="button" disabled={generating||revising||strategizing||concept.trim().length<5}
       onClick={()=>void revise()}>
       {revising?'REVISING…':'REVISE CURRENT WORLD'}
     </button>
+    <button type="button" disabled={generating||revising||strategizing||concept.trim().length<5}
+      onClick={()=>void strategize()}>{strategizing?'STRATEGIZING…':'STRATEGIC REVISION'}</button>
     <span>Version {selected+1} / {versions.length}</span>
    </div>
    {revisionError&&<p role="alert">{revisionError}</p>}
+   {strategyError&&<p role="alert">{strategyError}</p>}
    <div style={{display:'flex',gap:7,flexWrap:'wrap'}}>
     {versions.map((revision,index)=><button key={index} type="button"
-      disabled={generating||revising} aria-current={index===selected?'step':undefined}
+      disabled={generating||revising||strategizing} aria-current={index===selected?'step':undefined}
       onClick={()=>restoreVersion(index)}>v{index+1}: {revision.rationale.slice(0,48)}</button>)}
    </div>
+  </section>
+  <section aria-label="Strategic revision history" style={{marginBottom:20}}>
+   <h2>Strategic decisions</h2>
+   <p>Observed clicks indicate engagement, not a persuasive victory.
+     Exit-labelled controls in this lab are inert proxies.</p>
+   {lastDirective&&<p>Prior observation: {lastDirective.explanation}</p>}
+   {strategyHistory.length===0?<p>No strategic revisions yet.</p>:
+    <ol>{strategyHistory.map((entry,index)=><li key={index}>
+     <strong>{entry.plan.approach}</strong> · {entry.plan.hypothesis}
+     <p>Observation: {entry.plan.observation}</p>
+     <p>Intervention: {entry.plan.changeReason}</p>
+     <small>Engagement clicks: {entry.engagementCount};
+       exit-labelled clicks: {entry.exitProxyCount};
+       source characters changed: {entry.changedSourceCharacters}</small>
+    </li>)}</ol>}
   </section>
   <SandboxWorld world={world} seedState={seedState} onSnapshot={value=>{
     snapshotRef.current=value;
