@@ -22,6 +22,7 @@ export default function SandboxWorld({world,onSignal,onStatus}:{
  const [nonce,setNonce]=useState('');
  const [status,setStatus]=useState<SandboxStatus>('starting');
  const [active,setActive]=useState(true);
+ const [frameFocused,setFrameFocused]=useState(false);
  const valid=!!validateWorld(world);
 
  const report=useCallback((state:SandboxStatus)=>{
@@ -72,12 +73,14 @@ export default function SandboxWorld({world,onSignal,onStatus}:{
   report('starting');
  }
  function stop(){
+  setFrameFocused(false);
   setActive(false);
   report('stopped');
  }
  return <div>
   <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap',marginBottom:8}}>
    <span role="status">Sandbox: {valid?status:'invalid world'}</span>
+   <span>Frame focus: {frameFocused?'inside':'outside'}</span>
    <button type="button" onClick={restart} disabled={!valid}>RESTART FRAME</button>
    <button type="button" onClick={stop} disabled={!active}>STOP FRAME</button>
   </div>
@@ -85,6 +88,7 @@ export default function SandboxWorld({world,onSignal,onStatus}:{
    !active?<p>The isolated frame has been unloaded. Restart it to run this world again.</p>:
    !nonce?<p>Preparing isolated environment…</p>:
    <iframe key={nonce} ref={frame} title="Isolated authored environment"
+     onFocus={()=>setFrameFocused(true)} onBlur={()=>setFrameFocused(false)}
      sandbox="allow-scripts" referrerPolicy="no-referrer"
      srcDoc={document}
      style={{display:'block',width:'100%',height:680,
