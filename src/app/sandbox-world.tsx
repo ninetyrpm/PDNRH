@@ -1,6 +1,6 @@
 'use client';
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
-import {validateWorld,worldDocument,WORLD_PROTOCOL,type AuthoredWorld} from '@/lib/sandbox-world';
+import {validateWorld,validateWorldState,worldDocument,WORLD_PROTOCOL,type AuthoredWorld,type WorldState} from '@/lib/sandbox-world';
 
 type Signal={kind:'ready'|'click';id:string};
 export type SandboxStatus='starting'|'ready'|'stopped'|'expired'|'unresponsive';
@@ -8,16 +8,20 @@ const MAX_FRAME_LIFETIME_MS=120000;
 const STARTUP_DEADLINE_MS=8000;
 
 /** Browser permission boundary, not a CPU/memory quota. No game shell actions. */
-export default function SandboxWorld({world,onSignal,onStatus}:{
+export default function SandboxWorld({world,onSignal,onStatus,onSnapshot,seedState={}}:{
  world:AuthoredWorld;
  onSignal?:(signal:Signal)=>void;
  onStatus?:(status:SandboxStatus)=>void;
+ onSnapshot?:(state:WorldState)=>void;
+ seedState?:WorldState;
 }){
  const frame=useRef<HTMLIFrameElement>(null);
  const callback=useRef(onSignal);
  const statusCallback=useRef(onStatus);
+ const snapshotCallback=useRef(onSnapshot);
  callback.current=onSignal;
  statusCallback.current=onStatus;
+ snapshotCallback.current=onSnapshot;
  const [epoch,setEpoch]=useState(0);
  const [nonce,setNonce]=useState('');
  const [status,setStatus]=useState<SandboxStatus>('starting');
@@ -49,7 +53,7 @@ export default function SandboxWorld({world,onSignal,onStatus}:{
   return()=>{window.clearTimeout(startup);window.clearTimeout(deadline);};
  },[world,epoch,active,valid,report]);
 
- const document=useMemo(()=>nonce&&valid?worldDocument(world,nonce):'',[world,nonce,valid]);
+ const document=useMemo(()=>nonce&&valid?worldDocument(world,nonce,seedState):'',[world,nonce,valid,seedState]);
  useEffect(()=>{
   if(!active||!nonce)return;
   const onMessage=(event:MessageEvent)=>{
@@ -57,13 +61,23 @@ export default function SandboxWorld({world,onSignal,onStatus}:{
    const message=event.data as Record<string,unknown>|null;
    if(!message||typeof message!=='object'||message.protocol!==WORLD_PROTOCOL||
       message.nonce!==nonce)return;
-   if(message.kind!=='ready'&&message.kind!=='click')return;
+   if(message.kind!=='ready'&&message.kind!=='click'&&message.kind!=='snapshot')return;
    if(typeof message.id!=='string'||!/^[a-z][a-z0-9_-]{0,31}$/.test(message.id))return;
+   if(message.kind==='snapshot'){
+    const state=validateWorldState(message.state);
+    if(state)snapshotCallback.current?.(state);
+    return;
+   }
    if(message.kind==='ready')report('ready');
    callback.current?.({kind:message.kind,id:message.id});
   };
   window.addEventListener('message',onMessage);
-  return()=>window.removeEventListener('message',onMessage);
+  const capture=window.setInterval(()=>{
+   if(frame.current?.contentWindow)
+    frame.current.contentWindow.postMessage({protocol:WORLD_PROTOCOL,nonce,
+      kind:'snapshot_request'},'*');
+  },2500);
+  return()=>{window.clearInterval(capture);window.removeEventListener('message',onMessage);};
  },[nonce,active,report]);
 
  function restart(){
