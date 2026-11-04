@@ -47,3 +47,21 @@ test('PD13A world is not connected to game shell or model generation',()=>{
  assert.doesNotMatch(home,/SandboxWorld|sandbox-world/);
  assert.doesNotMatch(mutate,/worldDocument|AuthoredWorld/);
 });
+
+test('PD13A generation requires admin authorization and never edits live sessions',()=>{
+ const endpoint=fs.readFileSync(new URL('../src/app/api/sandbox-lab/generate/route.ts',import.meta.url),'utf8');
+ const auth=endpoint.indexOf('observatoryAuthorized()');
+ const provider=endpoint.indexOf("fetch('https://api.openai.com");
+ assert.ok(auth>=0&&provider>auth);
+ assert.match(endpoint,/incomingOrigin/);
+ assert.match(endpoint,/Generation cooling down/);
+ assert.match(endpoint,/validateWorld\(parsed\)/);
+ assert.doesNotMatch(endpoint,/INSERT INTO sessions|UPDATE sessions|session_strategy_state/);
+});
+test('PD13A lab is admin-only, while regular player UI remains unchanged',()=>{
+ const page=fs.readFileSync(new URL('../src/app/sandbox-lab/page.tsx',import.meta.url),'utf8');
+ const game=fs.readFileSync(new URL('../src/app/page.tsx',import.meta.url),'utf8');
+ assert.match(page,/observatoryAuthorized/);
+ assert.match(page,/return <Unlock\/>/);
+ assert.doesNotMatch(game,/SandboxWorld|sandbox-lab/);
+});
