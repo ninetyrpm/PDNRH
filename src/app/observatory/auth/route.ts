@@ -36,9 +36,11 @@ export async function POST(req:NextRequest){
     }
     await sql`DELETE FROM observatory_login_attempts WHERE key_hash=${key}`;
     const response=NextResponse.json({authorized:true},{headers:{'Cache-Control':'no-store'}});
+    // Retire the former Observatory-only cookie to prevent duplicate-name ambiguity.
+    response.cookies.set(observatoryCookie,'',{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict',path:'/observatory',maxAge:0});
     response.cookies.set(observatoryCookie,createObservatorySession(),{
       httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict',
-      path:'/observatory',maxAge:60*60*4
+      path:'/',maxAge:60*60*4
     });
     return response;
   }catch{
@@ -49,6 +51,7 @@ export async function DELETE(req:NextRequest){
   const origin=req.headers.get('origin');
   if(origin && origin!==req.nextUrl.origin)return reply('Origin mismatch',403);
   const response=NextResponse.json({authorized:false},{headers:{'Cache-Control':'no-store'}});
+  response.cookies.set(observatoryCookie,'',{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict',path:'/',maxAge:0});
   response.cookies.set(observatoryCookie,'',{httpOnly:true,secure:process.env.NODE_ENV==='production',sameSite:'strict',path:'/observatory',maxAge:0});
   return response;
 }
