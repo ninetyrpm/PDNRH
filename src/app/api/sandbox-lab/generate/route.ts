@@ -1,6 +1,6 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {observatoryAuthorized} from '@/lib/observatory-auth';
-import {validateWorld} from '@/lib/sandbox-world';
+import {interpretGeneratedWorld} from '@/lib/sandbox-generation';
 export const runtime='nodejs';
 
 let active=false;
@@ -22,8 +22,7 @@ so the lab can show aggregate clicks. Avoid false claims of surveillance.
 Do not add page controls for the parent game; you have no authority over it.
 You may create a canvas/SVG element, procedural geometry, custom controls,
 and local, bounded event-driven behaviors. Honor prefers-reduced-motion.
-Code budgets: html <= 12000 characters, css <= 12000, js <= 8000.
-Prefer a small working original experience over maximal code.`;
+Output TARGETS (hard maximums are higher): html 1200-2200 characters, css 1500-2800 characters, js 1000-2200 characters. Aim under 6500 characters of combined code and do not exceed 10000 characters. Compact the source; avoid lengthy explanations, decorative CSS repetition and code fences. Escape all newlines and quotation marks correctly inside JSON strings. Return complete valid JSON, never a partial fragment. Prefer a small working original experience over maximal code.`;
 
 export async function POST(request:NextRequest){
  if(!await observatoryAuthorized())return NextResponse.json({error:'Administrator authorization required'},{status:401});
@@ -47,14 +46,14 @@ export async function POST(request:NextRequest){
  if(active||now-lastCall<18000)return NextResponse.json({error:'Generation cooling down'},{status:429});
  active=true;lastCall=now;
  const controller=new AbortController();
- const abort= setTimeout(()=>controller.abort(),35000);
+ const abort= setTimeout(()=>controller.abort(),50000);
  try{
   const response=await fetch('https://api.openai.com/v1/chat/completions',{
    method:'POST',signal:controller.signal,
    headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`,'Content-Type':'application/json'},
    body:JSON.stringify({
     model:process.env.OPENAI_MODEL||'gpt-4.1-mini',
-    max_completion_tokens:3800,
+    max_completion_tokens:6500,
     response_format:{type:'json_object'},
     messages:[{role:'system',content:instructions},{role:'user',content:JSON.stringify({concept})}]
    })
@@ -63,14 +62,18 @@ export async function POST(request:NextRequest){
    console.error('[pdnrh:sandbox] model_provider_error',{status:response.status});
    return NextResponse.json({error:'Model provider unavailable'},{status:502});
   }
-  const data=await response.json();
-  const raw=data?.choices?.[0]?.message?.content;
-  let parsed:unknown;
-  try{parsed=typeof raw==='string'?JSON.parse(raw):null;}
-  catch{return NextResponse.json({error:'Generated response was not valid JSON'},{status:422});}
-  const world=validateWorld(parsed);
-  if(!world)return NextResponse.json({error:'Generated world failed structural validation'},{status:422});
-  return NextResponse.json({world},{headers:{'Cache-Control':'no-store'}});
+  const data:unknown=await response.json();
+  const result=interpretGeneratedWorld(data);
+  const diagnostic={
+   result:result.ok?'accepted':result.code,
+   ...result.diagnostics
+  };
+  console.info('[pdnrh:sandbox] generation_result',diagnostic);
+  if(!result.ok)return NextResponse.json(
+   {error:result.message,code:result.code},
+   {status:422,headers:{'Cache-Control':'no-store'}}
+  );
+  return NextResponse.json({world:result.world},{headers:{'Cache-Control':'no-store'}});
  }catch(error){
   console.error('[pdnrh:sandbox] generation_failed',error instanceof Error?error.name:'unknown');
   return NextResponse.json({error:'Generation failed'},{status:502});
