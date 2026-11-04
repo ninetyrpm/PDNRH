@@ -1,0 +1,3 @@
+.stage{width:100%;min-width:0;max-width:1200px;margin:14px 0 24px;}
+.status{font-size:12px;letter-spacing:.025em;max-width:100%;overflow-wrap:anywhere;}
+@media(max-width:650px){.stage{margin:5px 0 15px;}}
